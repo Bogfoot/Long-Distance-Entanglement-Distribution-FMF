@@ -1,5 +1,6 @@
 # Generated data
-Data/
+Data/AliceRaw/
+Data/Incoming/
 DataExtSync/
 Data_Basically_Usless/
 *.bin
