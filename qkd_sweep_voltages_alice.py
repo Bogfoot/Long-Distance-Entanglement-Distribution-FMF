@@ -32,7 +32,7 @@ except ImportError as exc:
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = BASE_DIR / "Data" / "EPC_Sweeps"
 
-MEASUREMENT_SECONDS = 30.0
+MEASUREMENT_SECONDS = 10.0
 SETTLE_SECONDS = 1
 VOLTAGE_START = 0.0
 VOLTAGE_STOP = 130.0
@@ -47,10 +47,10 @@ LIVE_PLOT = True
 # Each target is swept independently while the other seven controls remain
 # at zero. Indices 0..3 belong to Alice and 4..7 belong to Bob.
 SWEEP_TARGETS = (
-    ("Alice", 0),
-    ("Alice", 1),
-    ("Alice", 2),
-    ("Alice", 3),
+    # ("Alice", 0),
+    # ("Alice", 1),
+    # ("Alice", 2),
+    # ("Alice", 3),
     ("Bob", 0),
     ("Bob", 1),
     ("Bob", 2),
