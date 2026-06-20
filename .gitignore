@@ -1,0 +1,17 @@
+# Generated data
+Data/
+DataExtSync/
+Data_Basically_Usless/
+*.bin
+*.zip
+# Python
+__pycache__/
+*.py[cod]
+.spyproject/
+# Proprietary/platform binaries
+DLL_32bit/
+DLL_64bit/
+*.dll
+*.exe
+*.pyd
+*.so
