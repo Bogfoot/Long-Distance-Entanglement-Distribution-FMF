@@ -4,6 +4,7 @@ import math
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 from qkd_sync import PS_PER_NS, SyncCoincidenceAnalysis
 
@@ -39,12 +40,23 @@ def save_delay_scan_plot(
                 scan.counts,
                 linewidth=1.2,
             )
+            scan_peak_ps = float(
+                scan.delays_ps[int(np.argmax(scan.counts))]
+            )
+            if not np.isclose(scan_peak_ps, result.best_delay_ps):
+                axis.axvline(
+                    scan_peak_ps / PS_PER_NS,
+                    color="gray",
+                    linestyle=":",
+                    linewidth=1,
+                    label=f"scan peak={scan_peak_ps / PS_PER_NS:.3f} ns",
+                )
             axis.axvline(
                 result.best_delay_ps / PS_PER_NS,
                 color="red",
                 linestyle="--",
                 linewidth=1,
-                label=f"best={result.best_delay_ps / PS_PER_NS:.3f} ns",
+                label=f"used={result.best_delay_ps / PS_PER_NS:.3f} ns",
             )
         axis.set_title(
             f"{result.pair.name}: Alice ch{result.pair.alice_channel}, "
@@ -59,7 +71,11 @@ def save_delay_scan_plot(
     for axis in axes.flat[len(results):]:
         axis.set_visible(False)
 
-    figure.suptitle("Initial fine delay scans", fontsize=14)
+    figure.suptitle(
+        "Initial fine delay scans "
+        f"({analysis.coincidence_window_ps:g} ps coincidence window)",
+        fontsize=14,
+    )
     figure.tight_layout()
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -39,12 +39,12 @@ except ImportError as exc:
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "Data"
 
-RECORD_SECONDS = 20.0
+RECORD_SECONDS = 10.0
 PAUSE_BETWEEN_RECORDS = 1.0
 ERROR_RETRY_SECONDS = 5.0
 
 ALICE_EPC_ENABLED = True
-ALICE_EPC_DEVICE_REF = "0001005125"
+ALICE_EPC_DEVICE_REF = 0
 EPC_START_TEMPERATURE = 50.0
 
 QBER_OPTIMIZATION_ENABLED = True
@@ -61,12 +61,23 @@ QKD_COINCIDENCE_PAIRS = (
     ("AA", 3, 3),
 )
 
+QKD_DELAY_REFERENCE_PAIRS = {
+    "HH": "HH",
+    "HV": "HH",
+    "VH": "VV",
+    "VV": "VV",
+    "DD": "DD",
+    "DA": "DD",
+    "AD": "AA",
+    "AA": "AA",
+}
 
 @dataclass(frozen=True)
 class SyncProcessingConfig:
     sync_channel: int
     coincidence_window_ps: float
     coincidence_pairs: tuple[tuple[str, int, int], ...]
+    delay_reference_pairs: dict[str, str]
     store_coincidence_timetags: bool
     coincidence_timetag_dir: Path
     save_initial_delay_scan: bool
@@ -85,6 +96,7 @@ SYNC_PROCESSING = SyncProcessingConfig(
     sync_channel=DEFAULT_SYNC_CHANNEL,
     coincidence_window_ps=100.0,
     coincidence_pairs=QKD_COINCIDENCE_PAIRS,
+    delay_reference_pairs=QKD_DELAY_REFERENCE_PAIRS,
     store_coincidence_timetags=False,
     coincidence_timetag_dir=DATA_DIR / "CoincidenceTimetags",
     save_initial_delay_scan=True,
@@ -98,13 +110,18 @@ CORRECTION_LOGS = CorrectionLogPaths(
 )
 
 OPTIMIZER = OptimizerConfig(
-    measurement_seconds=20.0,
+    backend="nevergrad",  # "nelder-mead" or "nevergrad"
+    optimize_epcs="both",  # "alice", "bob", or "both"
+    measurement_seconds=5.0,
     visibility_target=0.95,
     base_step_volts=25.0,
     voltage_quantization=0.1,
     maximum_voltage=130.0,
     settle_seconds=0.1,
     stable_sleep_seconds=10 * 60,
+    nevergrad_optimizer="TBPSA",
+    nevergrad_budget=100,
+    nevergrad_seed=None,
 )
 
 
@@ -112,6 +129,7 @@ class MeasurementPipeline:
     def __init__(self, tagger) -> None:
         self.tagger = tagger
         self.initial_delay_scan_saved = False
+        self.fixed_delays_ps: dict[str, float] | None = None
 
     def measure(
         self,
@@ -146,6 +164,7 @@ class MeasurementPipeline:
             f"[Alice] Synchronizing record_id={acquisition.record_id}: "
             f"{acquisition.alice_path.name} with {acquisition.bob_path.name}"
         )
+        calibrating_delays = self.fixed_delays_ps is None
         synchronized = analyze_sync_coincidences(
             acquisition.alice_path,
             acquisition.bob_path,
@@ -153,29 +172,45 @@ class MeasurementPipeline:
             sync_channel=SYNC_PROCESSING.sync_channel,
             coincidence_window_ps=SYNC_PROCESSING.coincidence_window_ps,
             capture_delay_scans=(
-                SYNC_PROCESSING.save_initial_delay_scan
-                and not self.initial_delay_scan_saved
+                SYNC_PROCESSING.save_initial_delay_scan and calibrating_delays
             ),
+            fixed_delays_ps=self.fixed_delays_ps,
+            delay_reference_pairs=SYNC_PROCESSING.delay_reference_pairs,
         )
 
-        if (
-            SYNC_PROCESSING.save_initial_delay_scan
-            and not self.initial_delay_scan_saved
-        ):
-            output_path = (
-                SYNC_PROCESSING.delay_scan_dir
-                / f"initial_delay_scans_{acquisition.record_id}.png"
-            )
-            saved_path = save_delay_scan_plot(synchronized, output_path)
-            self.initial_delay_scan_saved = True
-            print(f"[Alice] Saved initial delay scans: {saved_path}")
-            print("[Alice] Initial best delays:")
-            for result in synchronized.pair_results:
+        if calibrating_delays:
+            calibration = synchronized
+            self.fixed_delays_ps = {
+                result.pair.name: float(result.best_delay_ps)
+                for result in calibration.pair_results
+            }
+
+            print("[Alice] Locked coincidence delays for EPC optimization:")
+            for pair_name, delay_ps in self.fixed_delays_ps.items():
                 print(
-                    f"  {result.pair.name}: "
-                    f"{result.best_delay_ps / 1_000.0:+.3f} ns "
-                    f"({result.best_delay_ps:+.0f} ps)"
+                    f"  {pair_name}: {delay_ps / 1_000.0:+.3f} ns "
+                    f"({delay_ps:+.0f} ps)"
                 )
+
+            if SYNC_PROCESSING.save_initial_delay_scan:
+                output_path = (
+                    SYNC_PROCESSING.delay_scan_dir
+                    / f"initial_delay_scans_{acquisition.record_id}.png"
+                )
+                saved_path = save_delay_scan_plot(calibration, output_path)
+                self.initial_delay_scan_saved = True
+                print(f"[Alice] Saved initial delay scans: {saved_path}")
+
+            # Recount the calibration acquisition with the locked delays so
+            # the first visibility is directly comparable to later samples.
+            synchronized = analyze_sync_coincidences(
+                acquisition.alice_path,
+                acquisition.bob_path,
+                SYNC_PROCESSING.coincidence_pairs,
+                sync_channel=SYNC_PROCESSING.sync_channel,
+                coincidence_window_ps=SYNC_PROCESSING.coincidence_window_ps,
+                fixed_delays_ps=self.fixed_delays_ps,
+            )
 
         if SYNC_PROCESSING.store_coincidence_timetags:
             saved = save_coincidence_timetag_pairs(
@@ -200,8 +235,6 @@ class MeasurementPipeline:
         print(
             f"[Alice] CURRENT RESULT | record_id={acquisition.record_id} | "
             f"visibility={100 * correction.visibility:.3f}% | "
-            f"vis_HV={100 * correction.basis_visibility['HV']} | "
-            f"vis_DA={100 * correction.basis_visibility['DA']} | "
             f"QBER={100.0 * correction.qber_total:.2f}% | "
             f"total={correction.total_coincidences} | "
             f"sync markers={correction.sync.clock_map.counters.size}"

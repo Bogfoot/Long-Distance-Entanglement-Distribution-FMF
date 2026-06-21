@@ -33,10 +33,10 @@ BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = BASE_DIR / "Data" / "EPC_Sweeps"
 
 MEASUREMENT_SECONDS = 10.0
-SETTLE_SECONDS = 1
+SETTLE_SECONDS = 0.5
 VOLTAGE_START = 0.0
 VOLTAGE_STOP = 130.0
-VOLTAGE_STEP = 5.0
+VOLTAGE_STEP = 15.0
 # Set to an explicit sequence for repeatability tests, for example:
 # (0.0, 130.0) * 5. Leave as None for the regular ascending sweep.
 VOLTAGE_SEQUENCE: tuple[float, ...] | None = None
@@ -47,18 +47,15 @@ LIVE_PLOT = True
 # Each target is swept independently while the other seven controls remain
 # at zero. Indices 0..3 belong to Alice and 4..7 belong to Bob.
 SWEEP_TARGETS = (
-    # ("Alice", 0),
-    # ("Alice", 1),
-    # ("Alice", 2),
-    # ("Alice", 3),
+    ("Alice", 0),
+    ("Alice", 1),
+    ("Alice", 2),
+    ("Alice", 3),
     ("Bob", 0),
     ("Bob", 1),
     ("Bob", 2),
     ("Bob", 3),
 )
-# SWEEP_TARGETS = (
-# ("Bob", 3),
-#     )
 
 SWEEP_FIELDNAMES = [
     "timestamp",
@@ -80,24 +77,21 @@ SWEEP_FIELDNAMES = [
 ]
 
 
-def voltage_points():
-      if VOLTAGE_SEQUENCE is not None:
-          points = [float(v) for v in VOLTAGE_SEQUENCE]
-          invalid = [v for v in points if v < 0.0 or v > 130.0]
+def voltage_points() -> list[float]:
+    if VOLTAGE_SEQUENCE is not None:
+        points = [float(voltage) for voltage in VOLTAGE_SEQUENCE]
+        if any(not 0.0 <= voltage <= 130.0 for voltage in points):
+            raise ValueError("VOLTAGE_SEQUENCE values must be within 0..130 V")
+        if not points:
+            raise ValueError("VOLTAGE_SEQUENCE cannot be empty")
+        return points
 
-          if invalid:
-              raise ValueError(f"Invalid voltages: {invalid}")
-
-          return points
-
-      points = []
-      voltage = float(VOLTAGE_START)
-
-      while voltage <= VOLTAGE_STOP + 1e-9:
-          points.append(voltage)
-          voltage += VOLTAGE_STEP
-
-      return points
+    points = []
+    voltage = VOLTAGE_START
+    while voltage <= VOLTAGE_STOP + 1.0e-9:
+        points.append(float(voltage))
+        voltage += VOLTAGE_STEP
+    return points
 
 
 def create_live_plot():
@@ -241,12 +235,14 @@ def measure_point(
 
     acquisition = acquire_pair(tagger, ACQUISITION, MEASUREMENT_SECONDS)
     try:
+        # Reference-pair delays are recalculated from every acquisition.
         synchronized = analyze_sync_coincidences(
             acquisition.alice_path,
             acquisition.bob_path,
             SYNC_PROCESSING.coincidence_pairs,
             sync_channel=SYNC_PROCESSING.sync_channel,
             coincidence_window_ps=SYNC_PROCESSING.coincidence_window_ps,
+            delay_reference_pairs=SYNC_PROCESSING.delay_reference_pairs,
         )
         correction = analyze_phi_plus_coincidences(synchronized)
         return acquisition, voltages, correction

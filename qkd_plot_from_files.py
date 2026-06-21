@@ -6,6 +6,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.ticker import FuncFormatter
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -15,7 +16,7 @@ DEFAULT_CSV_FILES = (
 )
 CSV_FILE: Path | None = None
 REFRESH_INTERVAL_SECONDS = 2.0
-HISTORY_ROWS = 100  # Set to 0 to display all rows.
+HISTORY_ROWS = 1500  # Set to 0 to display all rows.
 LIVE_UPDATE = True
 SAVE_PATH: Path | None = None
 PAIR_LABELS = ("HH", "VV", "DD", "AA", "HV", "VH", "DA", "AD")
@@ -34,7 +35,7 @@ PAIR_COLORS = {
 @dataclass(frozen=True)
 class MeasurementSeries:
     measurement_index: np.ndarray
-    elapsed_minutes: np.ndarray
+    relative_seconds: np.ndarray
     counts: dict[str, np.ndarray]
     total_coincidences: np.ndarray
     visibility_hv: np.ndarray
@@ -81,9 +82,10 @@ def read_measurements(path: Path, history: int) -> MeasurementSeries:
     }
     total = _optional_float_column(rows, "total_coincidences")
     if total is None:
-        total = np.sum(np.stack([counts[label] for label in PAIR_LABELS]),
-      axis=0,
-  )
+        total = np.sum(
+            np.stack([counts[label] for label in PAIR_LABELS]),
+            axis=0,
+        )
 
     visibility_hv = _optional_float_column(rows, "vis_HV")
     if visibility_hv is None:
@@ -99,16 +101,13 @@ def read_measurements(path: Path, history: int) -> MeasurementSeries:
             counts["DA"] + counts["AD"],
         )
 
-    timestamps = _optional_float_column(rows, "timestamp")
     measurement_index = np.arange(1, len(rows) + 1, dtype=np.int64)
-    if timestamps is None or not np.all(np.isfinite(timestamps)):
-        elapsed_minutes = measurement_index.astype(np.float64) - 1.0
-    else:
-        elapsed_minutes = (timestamps - timestamps[0]) / 60.0
+    timestamps = _timestamp_column(rows)
+    relative_seconds = timestamps - timestamps[-1]
 
     return MeasurementSeries(
         measurement_index=measurement_index,
-        elapsed_minutes=elapsed_minutes,
+        relative_seconds=relative_seconds,
         counts=counts,
         total_coincidences=total,
         visibility_hv=visibility_hv,
@@ -140,6 +139,44 @@ def _optional_float_column(
     return _float_column(rows, name)
 
 
+def _timestamp_column(rows: list[dict[str, str]]) -> np.ndarray:
+    if "timestamp" not in rows[0]:
+        raise ValueError("CSV is missing the timestamp column")
+
+    timestamps = np.full(len(rows), np.nan, dtype=np.float64)
+    for index, row in enumerate(rows):
+        value = row.get("timestamp", "")
+        try:
+            timestamps[index] = float(value)
+        except (TypeError, ValueError):
+            continue
+
+    valid = np.isfinite(timestamps)
+    valid_count = int(np.count_nonzero(valid))
+    if valid_count == 0:
+        raise ValueError("CSV contains no valid timestamp values")
+    if valid_count == 1 and len(rows) > 1:
+        raise ValueError(
+            "CSV needs at least two valid timestamps to reconstruct time"
+        )
+
+    if not np.all(valid):
+        row_positions = np.arange(len(rows), dtype=np.float64)
+        timestamps = np.interp(
+            row_positions,
+            row_positions[valid],
+            timestamps[valid],
+        )
+        print(
+            f"Interpolated {len(rows) - valid_count} missing or invalid "
+            "timestamp values"
+        )
+
+    if np.any(np.diff(timestamps) < 0):
+        raise ValueError("CSV timestamps are not in chronological order")
+    return timestamps
+
+
 def _visibility(correlated: np.ndarray, errors: np.ndarray) -> np.ndarray:
     total = correlated + errors
     return np.divide(
@@ -148,6 +185,20 @@ def _visibility(correlated: np.ndarray, errors: np.ndarray) -> np.ndarray:
         out=np.zeros_like(total, dtype=np.float64),
         where=total > 0,
     )
+
+
+def _format_relative_time(value: float, _position: float) -> str:
+    sign = "-" if value < -0.5 else ""
+    seconds = int(round(abs(value)))
+    days, seconds = divmod(seconds, 86_400)
+    hours, seconds = divmod(seconds, 3_600)
+    minutes, seconds = divmod(seconds, 60)
+
+    if days:
+        return f"{sign}{days}d {hours:02d}:{minutes:02d}:{seconds:02d}"
+    if hours:
+        return f"{sign}{hours}:{minutes:02d}:{seconds:02d}"
+    return f"{sign}{minutes}:{seconds:02d}"
 
 
 class MeasurementPlot:
@@ -164,7 +215,7 @@ class MeasurementPlot:
         self.figure.canvas.manager.set_window_title("QKD measurement monitor")
 
     def update(self, series: MeasurementSeries) -> None:
-        x = series.elapsed_minutes
+        x = series.relative_seconds
         self.pairs_ax.clear()
         self.total_ax.clear()
         self.visibility_ax.clear()
@@ -174,8 +225,8 @@ class MeasurementPlot:
                 x,
                 series.counts[label],
                 marker=".",
-                markersize=5,
-                linewidth=1.3,
+                markersize=3,
+                linewidth=0,
                 color=PAIR_COLORS[label],
                 label=label,
             )
@@ -185,8 +236,8 @@ class MeasurementPlot:
             series.total_coincidences,
             color="black",
             marker=".",
-            markersize=6,
-            linewidth=1.8,
+            markersize=4,
+            linewidth=0,
             label="Total",
         )
         self.visibility_ax.plot(
@@ -194,7 +245,7 @@ class MeasurementPlot:
             series.visibility_hv,
             color="#0072b2",
             marker=".",
-            linewidth=1.8,
+            linewidth=0,
             label="H/V visibility",
         )
         self.visibility_ax.plot(
@@ -202,7 +253,7 @@ class MeasurementPlot:
             series.visibility_da,
             color="#d55e00",
             marker=".",
-            linewidth=1.8,
+            linewidth=0,
             label="D/A visibility",
         )
 
@@ -213,7 +264,10 @@ class MeasurementPlot:
         self.pairs_ax.set_ylabel("Coincidences")
         self.total_ax.set_ylabel("Total coincidences")
         self.visibility_ax.set_ylabel("Visibility")
-        self.visibility_ax.set_xlabel("\"Time\"")
+        self.visibility_ax.set_xlabel("Time relative to latest measurement")
+        self.visibility_ax.xaxis.set_major_formatter(
+            FuncFormatter(_format_relative_time)
+        )
         self.visibility_ax.set_ylim(-1.05, 1.05)
         self.visibility_ax.axhline(
             0.95,

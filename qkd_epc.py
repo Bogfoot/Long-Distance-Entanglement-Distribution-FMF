@@ -38,7 +38,7 @@ def validate_voltages(values: Sequence[float]) -> list[float]:
             f"Expected four EPC voltages, received {len(values)} values"
         )
 
-    voltages = [round(float(v),4) for v in values]
+    voltages = [round(float(v),5) for v in values]
     for voltage in voltages:
         if voltage < 0.0 or voltage > EPC_MAX_VOLTAGE:
             raise ValueError(f"Voltage {voltage} outside 0..{EPC_MAX_VOLTAGE} V")

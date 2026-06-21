@@ -23,9 +23,9 @@ DEFAULT_SYNC_CHANNEL = 5
 COARSE_WINDOW_PS = 1 * PS_PER_NS
 COARSE_HALF_RANGE_PS = 50 * PS_PER_NS
 COARSE_STEP_PS = COARSE_WINDOW_PS / 2
-FINE_WINDOW_PS = 100.0
+FINE_WINDOW_PS = 200.0
 FINE_HALF_RANGE_PS = 50 * PS_PER_NS
-FINE_STEP_PS = 50.0
+FINE_STEP_PS = 100.0
 
 
 @dataclass
@@ -323,6 +323,7 @@ def find_best_delay(
     bob_ps: np.ndarray,
     *,
     capture_scan: bool = False,
+    coincidence_window_ps: float = FINE_WINDOW_PS,
 ) -> tuple[float, DelayScanResult | None]:
     if alice_ps.size == 0 or bob_ps.size == 0:
         return 0.0, None
@@ -338,7 +339,7 @@ def find_best_delay(
     fine_delays, fine_counts = scan_delays(
         alice_ps,
         bob_ps,
-        FINE_WINDOW_PS,
+        coincidence_window_ps,
         coarse_best - FINE_HALF_RANGE_PS,
         coarse_best + FINE_HALF_RANGE_PS,
         FINE_STEP_PS,
@@ -393,9 +394,39 @@ def analyze_sync_coincidences(
     sync_channel: int = DEFAULT_SYNC_CHANNEL,
     coincidence_window_ps: float = FINE_WINDOW_PS,
     capture_delay_scans: bool = False,
+    fixed_delays_ps: Mapping[str, float] | None = None,
+    delay_reference_pairs: Mapping[str, str] | None = None,
 ) -> SyncCoincidenceAnalysis:
     """Decode sync markers, map Bob timetags onto Alice's clock, and count pairs."""
     pairs = normalize_pairs(coincidence_pairs)
+    pairs_by_name = {pair.name: pair for pair in pairs}
+    if fixed_delays_ps is not None:
+        missing_delays = [
+            pair.name for pair in pairs if pair.name not in fixed_delays_ps
+        ]
+        if missing_delays:
+            raise ValueError(
+                "Fixed coincidence delays are missing pairs: "
+                + ", ".join(missing_delays)
+            )
+    if delay_reference_pairs is not None:
+        missing_mappings = [
+            pair.name for pair in pairs if pair.name not in delay_reference_pairs
+        ]
+        unknown_references = sorted(
+            set(delay_reference_pairs.values()) - set(pairs_by_name)
+        )
+        if missing_mappings:
+            raise ValueError(
+                "Delay-reference mapping is missing pairs: "
+                + ", ".join(missing_mappings)
+            )
+        if unknown_references:
+            raise ValueError(
+                "Delay-reference mapping contains unknown reference pairs: "
+                + ", ".join(unknown_references)
+            )
+
     alice_path = Path(alice_path)
     bob_path = Path(bob_path)
     alice_decode = decode_file(alice_path, sync_channel)
@@ -421,15 +452,55 @@ def analyze_sync_coincidences(
         for channel in {pair.bob_channel for pair in pairs}
     }
 
+    scanned_delays: dict[str, tuple[float, DelayScanResult | None]] = {}
+    diagnostic_scans: dict[str, DelayScanResult | None] = {}
+    if fixed_delays_ps is None:
+        reference_names = dict.fromkeys(
+            (
+                delay_reference_pairs[pair.name]
+                if delay_reference_pairs is not None
+                else pair.name
+            )
+            for pair in pairs
+        )
+        for reference_name in reference_names:
+            reference_pair = pairs_by_name[reference_name]
+            scanned_delays[reference_name] = find_best_delay(
+                alice_channels[reference_pair.alice_channel],
+                bob_channels[reference_pair.bob_channel],
+                capture_scan=capture_delay_scans,
+                coincidence_window_ps=coincidence_window_ps,
+            )
+        if capture_delay_scans and delay_reference_pairs is not None:
+            for pair in pairs:
+                if pair.name in reference_names:
+                    continue
+                _, diagnostic_scans[pair.name] = find_best_delay(
+                    alice_channels[pair.alice_channel],
+                    bob_channels[pair.bob_channel],
+                    capture_scan=True,
+                    coincidence_window_ps=coincidence_window_ps,
+                )
+
     pair_results: list[CoincidenceResult] = []
     for pair in pairs:
         alice_ps = alice_channels[pair.alice_channel]
         bob_ps = bob_channels[pair.bob_channel]
-        best_delay_ps, delay_scan = find_best_delay(
-            alice_ps,
-            bob_ps,
-            capture_scan=capture_delay_scans,
-        )
+        if fixed_delays_ps is None:
+            reference_name = (
+                delay_reference_pairs[pair.name]
+                if delay_reference_pairs is not None
+                else pair.name
+            )
+            best_delay_ps, reference_scan = scanned_delays[reference_name]
+            delay_scan = (
+                reference_scan
+                if pair.name == reference_name
+                else diagnostic_scans.get(pair.name)
+            )
+        else:
+            best_delay_ps = float(fixed_delays_ps[pair.name])
+            delay_scan = None
         coincidences_ps = collect_coincidences(
             alice_ps,
             bob_ps,

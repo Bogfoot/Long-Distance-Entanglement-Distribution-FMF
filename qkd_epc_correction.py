@@ -18,25 +18,32 @@ try:
 except ImportError:
     minimize = None
 
+try:
+    import nevergrad as ng
+except ImportError:
+    ng = None
+
 
 DEFAULT_PHI_PLUS_PAIRS = [
-    ("HH", 4, 4),
-    ("HV", 4, 2),
-    ("VH", 2, 4),
+    ("HH", 1, 1),
+    ("HV", 1, 2),
+    ("VH", 2, 1),
     ("VV", 2, 2),
-    ("DD", 1, 1),
-    ("DA", 1, 3),
-    ("AD", 3, 1),
-    ("AA", 3, 3),
+    ("DD", 3, 3),
+    ("DA", 3, 4),
+    ("AD", 4, 3),
+    ("AA", 4, 4),
 ]
 RESULT_PAIR_ORDER = ("HH", "HV", "VH", "VV", "DD", "DA", "AD", "AA")
 
 
 @dataclass(frozen=True)
 class OptimizerConfig:
+    backend: str = "nelder-mead"
+    optimize_epcs: str = "both"
     measurement_seconds: float = 5.0
     visibility_target: float = 0.95
-    base_step_volts: float = 25.0
+    base_step_volts: float = 20.0
     voltage_quantization: float = 0.1
     maximum_voltage: float = 130.0
     settle_seconds: float = 0.05
@@ -44,6 +51,9 @@ class OptimizerConfig:
     max_iterations: int = 200
     voltage_tolerance: float = 0.2
     score_tolerance: float = 1.0e-3
+    nevergrad_optimizer: str = "TBPSA"
+    nevergrad_budget: int = 100
+    nevergrad_seed: int | None = None
 
 
 @dataclass(frozen=True)
@@ -209,9 +219,72 @@ class PhiPlusOptimizer:
         self.log_paths = log_paths
         self.apply_voltages = apply_voltages
         self.measure = measure
+        self._validate_optimizer_config()
+
+    def _normalized_backend(self) -> str:
+        backend = self.config.backend.strip().lower().replace("_", "-")
+        if backend in {"nelder-mead", "scipy", "scipy-nelder-mead"}:
+            return "nelder-mead"
+        if backend == "nevergrad":
+            return "nevergrad"
+        raise ValueError(
+            f"Unknown optimizer backend {self.config.backend!r}; "
+            "use 'nelder-mead' or 'nevergrad'"
+        )
+
+    def _validate_optimizer_config(self) -> None:
+        backend = self._normalized_backend()
+        self._active_voltage_indices()
+        if backend == "nelder-mead" and minimize is None:
+            raise RuntimeError(
+                "Nelder-Mead optimization was selected, but scipy is not "
+                "installed. Install it on Alice with: python -m pip install scipy"
+            )
+        if backend == "nevergrad":
+            if ng is None:
+                raise RuntimeError(
+                    "Nevergrad optimization was selected, but nevergrad is not "
+                    "installed. Install it on Alice with: "
+                    "python -m pip install nevergrad"
+                )
+            if self.config.nevergrad_budget <= 0:
+                raise ValueError("nevergrad_budget must be positive")
+            if self.config.nevergrad_optimizer not in ng.optimizers.registry:
+                raise ValueError(
+                    "Unknown Nevergrad optimizer "
+                    f"{self.config.nevergrad_optimizer!r}. Inspect "
+                    "sorted(nevergrad.optimizers.registry) to list choices."
+                )
+
+    def _active_voltage_indices(self) -> np.ndarray:
+        scope = self.config.optimize_epcs.strip().lower()
+        if scope == "alice":
+            return np.arange(0, 4, dtype=np.int64)
+        if scope == "bob":
+            return np.arange(4, 8, dtype=np.int64)
+        if scope == "both":
+            return np.arange(0, 8, dtype=np.int64)
+        raise ValueError(
+            f"Unknown optimize_epcs value {self.config.optimize_epcs!r}; "
+            "use 'alice', 'bob', or 'both'"
+        )
+
+    def _full_voltage_vector(
+        self,
+        base_voltages: np.ndarray,
+        active_voltages: np.ndarray,
+    ) -> np.ndarray:
+        full = np.asarray(base_voltages, dtype=float).copy()
+        full[self._active_voltage_indices()] = self._quantize(active_voltages)
+        return full
 
     def monitor_forever(self, monitor_seconds: float) -> None:
-        print("[Alice] Starting synchronized Phi+ QBER optimizer loop")
+        print(
+            "[Alice] Starting synchronized Phi+ QBER optimizer loop: "
+            f"backend={self._normalized_backend()}, "
+            f"optimizer={self._optimizer_name()}, "
+            f"EPCs={self.config.optimize_epcs}"
+        )
         state = self._load_state()
         qber_state = state.get("qber", {})
         best_voltages = np.asarray(
@@ -223,6 +296,10 @@ class PhiPlusOptimizer:
 
         while True:
             loop_index += 1
+            print(
+                "[Alice] Optimizer monitor using current hardware state; "
+                f"stored best voltages={best_voltages.tolist()}"
+            )
             measurement = self.measure(monitor_seconds)
             visibility = measurement.visibility
             print(
@@ -262,6 +339,16 @@ class PhiPlusOptimizer:
         start_voltages: np.ndarray,
         step: float,
     ) -> tuple[np.ndarray, float]:
+        backend = self._normalized_backend()
+        if backend == "nelder-mead":
+            return self._optimize_nelder_mead(start_voltages, step)
+        return self._optimize_nevergrad(start_voltages, step)
+
+    def _optimize_nelder_mead(
+        self,
+        start_voltages: np.ndarray,
+        step: float,
+    ) -> tuple[np.ndarray, float]:
         if minimize is None:
             raise RuntimeError(
                 "Phi+ optimization requires scipy.optimize.minimize, "
@@ -269,19 +356,44 @@ class PhiPlusOptimizer:
             )
 
         start_voltages = self._quantize(start_voltages)
+        active_indices = self._active_voltage_indices()
+        active_start = start_voltages[active_indices]
         best_voltages = start_voltages.copy()
         best_visibility = -1.0
+        evaluation_index = 0
+        previous_voltages: np.ndarray | None = None
 
-        def objective(values: np.ndarray) -> float:
+        def objective(active_values: np.ndarray) -> float:
             nonlocal best_voltages, best_visibility
-            voltages = self._quantize(values)
+            nonlocal evaluation_index, previous_voltages
+            voltages = self._full_voltage_vector(
+                start_voltages,
+                active_values,
+            )
+            evaluation_index += 1
+            repeated = (
+                previous_voltages is not None
+                and np.array_equal(voltages, previous_voltages)
+            )
+            print(
+                f"[Alice] Optimizer candidate #{evaluation_index}: "
+                f"{voltages.tolist()}"
+                + (" (same as previous candidate)" if repeated else "")
+            )
+            previous_voltages = voltages.copy()
             self.apply_voltages(voltages.tolist())
             if self.config.settle_seconds > 0:
                 time.sleep(self.config.settle_seconds)
 
             measurement = self.measure(self.config.measurement_seconds)
             visibility = measurement.visibility
-            self._log_iteration(voltages, measurement)
+            self._log_iteration(
+                voltages,
+                measurement,
+                backend="nelder-mead",
+                optimizer_name="Nelder-Mead",
+                evaluation_index=evaluation_index,
+            )
 
             if visibility > best_visibility:
                 best_visibility = visibility
@@ -296,12 +408,12 @@ class PhiPlusOptimizer:
                 raise StopIteration
             return -visibility
 
-        parameter_count = int(start_voltages.size)
+        parameter_count = int(active_start.size)
         initial_simplex = np.vstack(
-            [start_voltages]
+            [active_start]
             + [
                 self._quantize(
-                    start_voltages + step * np.eye(parameter_count)[index]
+                    active_start + step * np.eye(parameter_count)[index]
                 )
                 for index in range(parameter_count)
             ]
@@ -310,7 +422,7 @@ class PhiPlusOptimizer:
         try:
             minimize(
                 objective,
-                start_voltages,
+                active_start,
                 method="Nelder-Mead",
                 options={
                     "maxiter": self.config.max_iterations,
@@ -323,13 +435,124 @@ class PhiPlusOptimizer:
         except StopIteration:
             pass
 
+        print(
+            "[Alice] Restoring optimizer best voltages: "
+            f"{best_voltages.tolist()} "
+            f"(visibility={best_visibility:.3f})"
+        )
         self.apply_voltages(best_voltages.tolist())
         return best_voltages, best_visibility
+
+    def _optimize_nevergrad(
+        self,
+        start_voltages: np.ndarray,
+        step: float,
+    ) -> tuple[np.ndarray, float]:
+        if ng is None:
+            raise RuntimeError(
+                "Nevergrad optimization was selected, but nevergrad is not "
+                "installed. Install it on Alice with: python -m pip install nevergrad"
+            )
+        if self.config.nevergrad_budget <= 0:
+            raise ValueError("nevergrad_budget must be positive")
+
+        optimizer_name = self.config.nevergrad_optimizer
+        optimizer_class = ng.optimizers.registry.get(optimizer_name)
+        if optimizer_class is None:
+            available = ", ".join(sorted(ng.optimizers.registry))
+            raise ValueError(
+                f"Unknown Nevergrad optimizer {optimizer_name!r}. "
+                f"Available optimizers: {available}"
+            )
+
+        start_voltages = self._quantize(start_voltages)
+        active_indices = self._active_voltage_indices()
+        active_start = start_voltages[active_indices]
+        parametrization = (
+            ng.p.Array(init=active_start)
+            .set_bounds(0.0, self.config.maximum_voltage)
+            .set_mutation(sigma=step)
+        )
+        if self.config.nevergrad_seed is not None:
+            parametrization.random_state.seed(self.config.nevergrad_seed)
+
+        optimizer = optimizer_class(
+            parametrization=parametrization,
+            budget=self.config.nevergrad_budget,
+            num_workers=1,
+        )
+        optimizer.suggest(active_start.tolist())
+
+        best_voltages = start_voltages.copy()
+        best_visibility = -np.inf
+        previous_voltages: np.ndarray | None = None
+
+        print(
+            f"[Alice] Starting Nevergrad optimizer {optimizer_name} with "
+            f"budget={self.config.nevergrad_budget}, step={step:.1f} V"
+        )
+
+        for evaluation_index in range(1, self.config.nevergrad_budget + 1):
+            candidate = optimizer.ask()
+            voltages = self._full_voltage_vector(
+                start_voltages,
+                np.asarray(candidate.value, dtype=float),
+            )
+            repeated = (
+                previous_voltages is not None
+                and np.array_equal(voltages, previous_voltages)
+            )
+            print(
+                f"[Alice] Nevergrad {optimizer_name} candidate "
+                f"#{evaluation_index}: {voltages.tolist()}"
+                + (" (same as previous candidate)" if repeated else "")
+            )
+            previous_voltages = voltages.copy()
+
+            self.apply_voltages(voltages.tolist())
+            if self.config.settle_seconds > 0:
+                time.sleep(self.config.settle_seconds)
+
+            measurement = self.measure(self.config.measurement_seconds)
+            visibility = float(measurement.visibility)
+            optimizer.tell(candidate, -visibility)
+            self._log_iteration(
+                voltages,
+                measurement,
+                backend="nevergrad",
+                optimizer_name=optimizer_name,
+                evaluation_index=evaluation_index,
+            )
+
+            if visibility > best_visibility:
+                best_visibility = visibility
+                best_voltages = voltages.copy()
+                self._save_best_state(best_voltages, best_visibility)
+
+            if visibility >= self.config.visibility_target:
+                print(
+                    f"[Alice] Nevergrad reached visibility "
+                    f"{visibility:.3f} >= {self.config.visibility_target:.3f}"
+                )
+                break
+
+        print(
+            "[Alice] Restoring Nevergrad best measured voltages: "
+            f"{best_voltages.tolist()} "
+            f"(visibility={best_visibility:.3f})"
+        )
+        self.apply_voltages(best_voltages.tolist())
+        return best_voltages, float(best_visibility)
 
     def _quantize(self, values: np.ndarray) -> np.ndarray:
         step = self.config.voltage_quantization
         quantized = np.round(np.asarray(values, dtype=float) / step) * step
         return np.clip(quantized, 0.0, self.config.maximum_voltage)
+
+    def _optimizer_name(self) -> str:
+        if self._normalized_backend() == "nevergrad":
+            return self.config.nevergrad_optimizer
+        return "Nelder-Mead"
 
     def _load_state(self) -> dict[str, Any]:
         path = self.log_paths.optimizer_state_json
@@ -338,6 +561,9 @@ class PhiPlusOptimizer:
                 "qber": {
                     "best_V": [65.0] * 8,
                     "best_visibility": self.config.visibility_target,
+                    "optimizer_backend": self._normalized_backend(),
+                    "optimizer_name": self._optimizer_name(),
+                    "optimize_epcs": self.config.optimize_epcs,
                 },
                 "last_update": current_utc_iso(),
             }
@@ -356,6 +582,9 @@ class PhiPlusOptimizer:
             "qber": {
                 "best_V": best_voltages.tolist(),
                 "best_visibility": float(best_visibility),
+                "optimizer_backend": self._normalized_backend(),
+                "optimizer_name": self._optimizer_name(),
+                "optimize_epcs": self.config.optimize_epcs,
                 "last_update": current_utc_iso(),
             },
             "last_update": current_utc_iso(),
@@ -373,12 +602,20 @@ class PhiPlusOptimizer:
         self,
         voltages: np.ndarray,
         measurement: PhiPlusCorrectionResult,
+        *,
+        backend: str,
+        optimizer_name: str,
+        evaluation_index: int,
     ) -> None:
         counts = measurement.counts
         _append_csv_row(
             self.log_paths.optimizer_iterations_csv,
             {
                 "timestamp": time.time(),
+                "optimizer_backend": backend,
+                "optimizer_name": optimizer_name,
+                "optimize_epcs": self.config.optimize_epcs,
+                "evaluation_index": evaluation_index,
                 "voltages": json.dumps(voltages.tolist()),
                 "visibility": float(measurement.visibility),
                 "QBER": float(measurement.qber_total),
