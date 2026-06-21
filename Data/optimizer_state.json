@@ -1,17 +1,20 @@
 {
   "qber": {
     "best_V": [
-      69.0,
-      63.7,
-      93.0,
-      65.4,
+      128.5,
+      13.0,
+      77.4,
+      60.0,
       70.3,
       64.5,
       68.5,
       71.9
     ],
-    "best_visibility": 0.39709760372135683,
-    "last_update": "2026-06-21T05:31:58.031822+00:00"
+    "best_visibility": 0.34381898454746135,
+    "optimizer_backend": "nevergrad",
+    "optimizer_name": "TBPSA",
+    "optimize_epcs": "alice",
+    "last_update": "2026-06-21T14:18:27.698528+00:00"
   },
-  "last_update": "2026-06-21T05:31:58.031832+00:00"
+  "last_update": "2026-06-21T14:18:27.698542+00:00"
 }

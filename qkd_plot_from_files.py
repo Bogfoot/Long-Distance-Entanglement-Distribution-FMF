@@ -16,9 +16,10 @@ DEFAULT_CSV_FILES = (
 )
 CSV_FILE: Path | None = None
 REFRESH_INTERVAL_SECONDS = 2.0
-HISTORY_ROWS = 1500  # Set to 0 to display all rows.
+HISTORY_ROWS = 200  # Set to 0 to display all rows.
 LIVE_UPDATE = True
 SAVE_PATH: Path | None = None
+PAIR_TREND_WINDOW = 5  # Set to 0 or 1 to disable.
 PAIR_LABELS = ("HH", "VV", "DD", "AA", "HV", "VH", "DA", "AD")
 PAIR_COLORS = {
     "HH": "#1f77b4",
@@ -38,6 +39,7 @@ class MeasurementSeries:
     relative_seconds: np.ndarray
     counts: dict[str, np.ndarray]
     total_coincidences: np.ndarray
+    visibility_total: np.ndarray
     visibility_hv: np.ndarray
     visibility_da: np.ndarray
 
@@ -101,6 +103,10 @@ def read_measurements(path: Path, history: int) -> MeasurementSeries:
             counts["DA"] + counts["AD"],
         )
 
+    visibility_total = _optional_float_column(rows, "visibility")
+    if visibility_total is None:
+        visibility_total = (visibility_hv + visibility_da) / 2.0
+
     measurement_index = np.arange(1, len(rows) + 1, dtype=np.int64)
     timestamps = _timestamp_column(rows)
     relative_seconds = timestamps - timestamps[-1]
@@ -110,6 +116,7 @@ def read_measurements(path: Path, history: int) -> MeasurementSeries:
         relative_seconds=relative_seconds,
         counts=counts,
         total_coincidences=total,
+        visibility_total=visibility_total,
         visibility_hv=visibility_hv,
         visibility_da=visibility_da,
     )
@@ -187,6 +194,16 @@ def _visibility(correlated: np.ndarray, errors: np.ndarray) -> np.ndarray:
     )
 
 
+def _rolling_mean(values: np.ndarray, window: int) -> np.ndarray:
+    if window <= 1 or values.size < window:
+        return np.full(values.shape, np.nan, dtype=np.float64)
+    kernel = np.ones(window, dtype=np.float64) / window
+    smoothed = np.convolve(values, kernel, mode="valid")
+    result = np.full(values.shape, np.nan, dtype=np.float64)
+    result[window - 1 :] = smoothed
+    return result
+
+
 def _format_relative_time(value: float, _position: float) -> str:
     sign = "-" if value < -0.5 else ""
     seconds = int(round(abs(value)))
@@ -225,27 +242,47 @@ class MeasurementPlot:
                 x,
                 series.counts[label],
                 marker=".",
-                markersize=3,
-                linewidth=0,
+                markersize=5,
+                linestyle="None",
                 color=PAIR_COLORS[label],
                 label=label,
             )
+            if PAIR_TREND_WINDOW > 1:
+                self.pairs_ax.plot(
+                    x,
+                    _rolling_mean(
+                        series.counts[label],
+                        PAIR_TREND_WINDOW,
+                    ),
+                    linewidth=1.8,
+                    color=PAIR_COLORS[label],
+                    alpha=0.9,
+                    label="_nolegend_",
+                )
 
         self.total_ax.plot(
             x,
             series.total_coincidences,
             color="black",
             marker=".",
-            markersize=4,
-            linewidth=0,
+            markersize=6,
+            linestyle="None",
             label="Total",
+        )
+        self.visibility_ax.plot(
+            x,
+            series.visibility_total,
+            color="black",
+            marker=".",
+            linestyle="None",
+            label="Total visibility",
         )
         self.visibility_ax.plot(
             x,
             series.visibility_hv,
             color="#0072b2",
             marker=".",
-            linewidth=0,
+            linestyle="None",
             label="H/V visibility",
         )
         self.visibility_ax.plot(
@@ -253,7 +290,7 @@ class MeasurementPlot:
             series.visibility_da,
             color="#d55e00",
             marker=".",
-            linewidth=0,
+            linestyle="None",
             label="D/A visibility",
         )
 
@@ -301,6 +338,8 @@ def main() -> None:
         raise ValueError("REFRESH_INTERVAL_SECONDS must be positive")
     if HISTORY_ROWS < 0:
         raise ValueError("HISTORY_ROWS cannot be negative")
+    if PAIR_TREND_WINDOW < 0:
+        raise ValueError("PAIR_TREND_WINDOW cannot be negative")
 
     plot = MeasurementPlot(csv_path)
     plt.ion()

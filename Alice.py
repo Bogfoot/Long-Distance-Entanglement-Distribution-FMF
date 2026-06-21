@@ -63,12 +63,12 @@ QKD_COINCIDENCE_PAIRS = (
 
 QKD_DELAY_REFERENCE_PAIRS = {
     "HH": "HH",
-    "HV": "HH",
-    "VH": "VV",
+    "HV": "HV",
+    "VH": "VH",
     "VV": "VV",
     "DD": "DD",
-    "DA": "DD",
-    "AD": "AA",
+    "DA": "DA",
+    "AD": "AD",
     "AA": "AA",
 }
 
@@ -94,7 +94,7 @@ ACQUISITION = AcquisitionConfig(
 
 SYNC_PROCESSING = SyncProcessingConfig(
     sync_channel=DEFAULT_SYNC_CHANNEL,
-    coincidence_window_ps=100.0,
+    coincidence_window_ps=750.0,
     coincidence_pairs=QKD_COINCIDENCE_PAIRS,
     delay_reference_pairs=QKD_DELAY_REFERENCE_PAIRS,
     store_coincidence_timetags=False,
@@ -111,9 +111,9 @@ CORRECTION_LOGS = CorrectionLogPaths(
 
 OPTIMIZER = OptimizerConfig(
     backend="nevergrad",  # "nelder-mead" or "nevergrad"
-    optimize_epcs="both",  # "alice", "bob", or "both"
-    measurement_seconds=5.0,
-    visibility_target=0.95,
+    optimize_epcs="alice",  # "alice", "bob", or "both"
+    measurement_seconds=10.0,
+    visibility_target=0.9,
     base_step_volts=25.0,
     voltage_quantization=0.1,
     maximum_voltage=130.0,
@@ -235,6 +235,8 @@ class MeasurementPipeline:
         print(
             f"[Alice] CURRENT RESULT | record_id={acquisition.record_id} | "
             f"visibility={100 * correction.visibility:.3f}% | "
+            f"HV visibility={100 * correction.basis_visibility['HV']:.3f}% | "
+            f"DA visibility={100 * correction.basis_visibility['DA']:.3f}% | "
             f"QBER={100.0 * correction.qber_total:.2f}% | "
             f"total={correction.total_coincidences} | "
             f"sync markers={correction.sync.clock_map.counters.size}"
