@@ -179,7 +179,7 @@ for result in sync.pair_results:
 save_coincidence_timetag_pairs(sync, "Data/CoincidenceTimetags")
 ```
 
-`qkd_epc_correction.py` owns the Phi+ interpretation, result logging, optimizer state, and Nelder-Mead implementation. It consumes the already-synchronized coincidence result:
+`qkd_epc_correction.py` owns the Phi+ interpretation, result logging, optimizer state, and selectable Nelder-Mead/Nevergrad optimization backends. It consumes the already-synchronized coincidence result:
 
 ```python
 from qkd_epc_correction import DEFAULT_PHI_PLUS_PAIRS, analyze_phi_plus_coincidences
@@ -236,10 +236,67 @@ Later passive or optimizer measurements still find their delays normally but do 
 `qkd_epc_correction.PhiPlusOptimizer` implements the optional correction loop based on the local `Stability_Check_and_Record.py` approach:
 
 - set `QBER_OPTIMIZATION_ENABLED = True` to enable it;
-- it uses Nelder-Mead over eight voltages, `Alice[0:4] + Bob[4:8]`;
+- it optimizes eight voltages, `Alice[0:4] + Bob[4:8]`;
+- choose `backend="nelder-mead"` for SciPy Nelder-Mead or `backend="nevergrad"` for a Nevergrad optimizer;
 - each objective evaluation applies voltages, requests new Alice/Bob data, syncs it, extracts coincidences, and computes the EPC correction metric;
-- the best voltage vector is saved in `Data/optimizer_state.json`;
-- per-iteration optimizer rows, including all eight coincidence counts, are written to `Data/qber_iterlog.csv`.
+- the best measured voltage vector is restored and saved in `Data/optimizer_state.json`;
+- per-evaluation rows, including backend, optimizer name, voltages, visibility, and all eight coincidence counts, are written to `Data/qber_iterlog.csv`.
+
+Nevergrad is optional. Install it only on Alice when that backend is selected:
+
+```powershell
+python -m pip install nevergrad
+```
+
+Configure the backend near the top of `Alice.py`:
+
+```python
+OPTIMIZER = OptimizerConfig(
+    backend="nevergrad",       # "nevergrad" or "nelder-mead"
+    optimize_epcs="both",      # "alice", "bob", or "both"
+    measurement_seconds=5.0,
+    base_step_volts=25.0,
+    nevergrad_optimizer="TBPSA",  # for example "TBPSA" or "NGOpt"
+    nevergrad_budget=100,      # maximum hardware measurements per run
+    nevergrad_seed=None,
+)
+```
+
+`optimize_epcs` controls which voltage dimensions are searched:
+
+- `"alice"` optimizes Alice DAC0-3 and holds Bob's four saved voltages fixed;
+- `"bob"` optimizes Bob DAC0-3 and holds Alice's four saved voltages fixed;
+- `"both"` optimizes all eight voltages.
+
+The optimizer state and iteration CSV always retain the complete eight-voltage
+vector, including the fixed values when only one EPC is optimized.
+
+Nevergrad uses its sequential `ask`/`tell` interface because Alice can run only one paired hardware acquisition at a time. The objective passed to Nevergrad is `-visibility`, since Nevergrad minimizes. `TBPSA` is the default noise-oriented choice; `NGOpt` is a reasonable adaptive alternative.
+
+Nevergrad optimizer names are case-sensitive and depend on the installed
+Nevergrad version. Print every available optimizer on Alice with:
+
+```powershell
+python -c "import nevergrad as ng; print('\n'.join(sorted(ng.optimizers.registry)))"
+```
+
+Practical choices for the eight-voltage EPC problem are:
+
+| Optimizer | Suggested use |
+| --- | --- |
+| `TBPSA` | Recommended starting point for noisy visibility measurements. |
+| `NGOpt` | Adaptive general-purpose optimizer. |
+| `NgIohTuned` | Tuned adaptive meta-optimizer. |
+| `NoisyOnePlusOne` | Simple optimizer designed for noisy objectives. |
+| `NoisyDE` | Noise-aware differential evolution; use a larger budget. |
+| `OnePlusOne` | Simple sequential baseline. |
+| `PSO` | Robust broad exploration. |
+| `TwoPointsDE` | Population-based exploration with a larger budget. |
+| `CMA` | Useful when measurement noise is lower and the budget is large. |
+| `RandomSearch` | Baseline for judging whether an optimizer adds value. |
+
+Compare optimizers using the same exposure, starting voltages, mutation step,
+and measurement budget. Start with `TBPSA`, then compare it against `NGOpt`.
 
 Leave `QBER_OPTIMIZATION_ENABLED = False` in `Alice.py` for passive acquisition and logging.
 
@@ -305,6 +362,31 @@ python qkd_plot_measurements.py
 ```
 
 When `vis_HV` and `vis_DA` are not present, as in the optimizer log, the script calculates them from the eight coincidence columns.
+
+### `qkd_epc_manual_gui.py`
+
+Run this standalone GUI on Alice when manual EPC testing is needed without
+the optimizer:
+
+```bash
+python qkd_epc_manual_gui.py
+```
+
+Start `Bob.py` first. The GUI provides:
+
+- enable toggles and four 0-130 V controls for the Alice and Bob EPCs;
+- Apply, Zero, one-shot measurement, and continuous measurement controls;
+- configurable paired-recording exposure, analysis coincidence window, and
+  EPC settling time;
+- total, H/V, and D/A visibility, QBER, all eight coincidence counts, and
+  the delays used for counting;
+- a live visibility and total-coincidence history plot;
+- optional result logging to `Data/alice_results.csv` and deletion of
+  successful raw acquisitions.
+
+Disable Alice EPC control for a Bob-only test, or disable both EPC controls
+to use the GUI as a synchronized measurement monitor. Every measurement
+performs fresh reference-delay scans using the selected coincidence window.
 
 ## Synchronization Signal Assumptions
 
