@@ -41,6 +41,8 @@ RESULT_PAIR_ORDER = ("HH", "HV", "VH", "VV", "DD", "DA", "AD", "AA")
 class OptimizerConfig:
     backend: str = "nelder-mead"
     optimize_epcs: str = "both"
+    objective_metric: str = "visibility"
+    objective_target: float | None = None
     measurement_seconds: float = 5.0
     visibility_target: float = 0.95
     base_step_volts: float = 20.0
@@ -193,12 +195,12 @@ def append_correction_result(
 
 
 def choose_qber_optimizer_step(
-    current_visibility: float,
-    best_visibility: float,
+    current_score: float,
+    best_score: float,
     *,
     base_step: float,
 ) -> float:
-    drift = abs(float(current_visibility) - float(best_visibility))
+    drift = abs(float(current_score) - float(best_score))
     scale = 0.2 if drift < 0.05 else 0.5 if drift < 0.5 else 1.0
     return float(base_step * scale)
 
@@ -235,6 +237,7 @@ class PhiPlusOptimizer:
     def _validate_optimizer_config(self) -> None:
         backend = self._normalized_backend()
         self._active_voltage_indices()
+        self._normalized_objective_metric()
         if backend == "nelder-mead" and minimize is None:
             raise RuntimeError(
                 "Nelder-Mead optimization was selected, but scipy is not "
@@ -255,6 +258,38 @@ class PhiPlusOptimizer:
                     f"{self.config.nevergrad_optimizer!r}. Inspect "
                     "sorted(nevergrad.optimizers.registry) to list choices."
                 )
+
+    def _normalized_objective_metric(self) -> str:
+        metric = self.config.objective_metric.strip().lower().replace("-", "_")
+        aliases = {
+            "visibility": "visibility",
+            "total_visibility": "visibility",
+            "vis_hv": "vis_HV",
+            "hv_visibility": "vis_HV",
+            "hv": "vis_HV",
+            "vis_da": "vis_DA",
+            "da_visibility": "vis_DA",
+            "da": "vis_DA",
+        }
+        if metric not in aliases:
+            raise ValueError(
+                f"Unknown objective_metric {self.config.objective_metric!r}; "
+                "use 'visibility', 'vis_HV', or 'vis_DA'"
+            )
+        return aliases[metric]
+
+    def _objective_target(self) -> float:
+        if self.config.objective_target is not None:
+            return float(self.config.objective_target)
+        return float(self.config.visibility_target)
+
+    def _objective_score(self, measurement: PhiPlusCorrectionResult) -> float:
+        metric = self._normalized_objective_metric()
+        if metric == "visibility":
+            return float(measurement.visibility)
+        if metric == "vis_HV":
+            return float(measurement.basis_visibility["HV"])
+        return float(measurement.basis_visibility["DA"])
 
     def _active_voltage_indices(self) -> np.ndarray:
         scope = self.config.optimize_epcs.strip().lower()
@@ -280,10 +315,12 @@ class PhiPlusOptimizer:
 
     def monitor_forever(self, monitor_seconds: float) -> None:
         print(
-            "[Alice] Starting synchronized Phi+ QBER optimizer loop: "
+            "[Alice] Starting synchronized Phi+ EPC optimizer loop: "
             f"backend={self._normalized_backend()}, "
             f"optimizer={self._optimizer_name()}, "
-            f"EPCs={self.config.optimize_epcs}"
+            f"EPCs={self.config.optimize_epcs}, "
+            f"objective={self._normalized_objective_metric()}, "
+            f"target={self._objective_target():.3f}"
         )
         state = self._load_state()
         qber_state = state.get("qber", {})
@@ -291,7 +328,18 @@ class PhiPlusOptimizer:
             qber_state.get("best_V", [65.0] * 8),
             dtype=float,
         )
-        best_visibility = float(qber_state.get("best_visibility", 0.95))
+        objective_metric = self._normalized_objective_metric()
+        stored_metric = qber_state.get("objective_metric")
+        if stored_metric == objective_metric:
+            best_score = float(
+                qber_state.get(
+                    "best_score",
+                    qber_state.get("best_visibility", -np.inf),
+                )
+            )
+        else:
+            best_score = -np.inf
+        target = self._objective_target()
         loop_index = 0
 
         while True:
@@ -301,38 +349,38 @@ class PhiPlusOptimizer:
                 f"stored best voltages={best_voltages.tolist()}"
             )
             measurement = self.measure(monitor_seconds)
-            visibility = measurement.visibility
+            score = self._objective_score(measurement)
             print(
                 f"[Alice] Optimizer check #{loop_index}: "
-                f"visibility={visibility:.3f}, "
+                f"objective {objective_metric}={score:.3f}, "
+                f"total visibility={measurement.visibility:.3f}, "
                 f"QBER={100.0 * measurement.qber_total:.2f}%, "
                 f"total coincidences={measurement.total_coincidences}, "
-                f"stored best={best_visibility:.3f}"
+                f"stored best score={best_score:.3f}"
             )
 
-            if visibility >= self.config.visibility_target:
+            if score >= target:
                 print(
-                    f"[Alice] Phi+ state stable; sleeping "
+                    f"[Alice] Objective target reached; sleeping "
                     f"{self.config.stable_sleep_seconds:g} s"
                 )
                 time.sleep(self.config.stable_sleep_seconds)
                 continue
 
             step = choose_qber_optimizer_step(
-                visibility,
-                best_visibility,
+                score,
+                best_score,
                 base_step=self.config.base_step_volts,
             )
             print(
-                f"[Alice] Visibility below target by "
-                f"{self.config.visibility_target - visibility:.3f}; "
-                f"optimizing with step={step:.1f} V"
+                f"[Alice] Objective {objective_metric} below target by "
+                f"{target - score:.3f}; optimizing with step={step:.1f} V"
             )
-            best_voltages, best_visibility = self._optimize(
+            best_voltages, best_score = self._optimize(
                 best_voltages,
                 step,
             )
-            self._save_best_state(best_voltages, best_visibility)
+            self._save_best_state(best_voltages, best_score)
 
     def _optimize(
         self,
@@ -359,12 +407,12 @@ class PhiPlusOptimizer:
         active_indices = self._active_voltage_indices()
         active_start = start_voltages[active_indices]
         best_voltages = start_voltages.copy()
-        best_visibility = -1.0
+        best_score = -np.inf
         evaluation_index = 0
         previous_voltages: np.ndarray | None = None
 
         def objective(active_values: np.ndarray) -> float:
-            nonlocal best_voltages, best_visibility
+            nonlocal best_voltages, best_score
             nonlocal evaluation_index, previous_voltages
             voltages = self._full_voltage_vector(
                 start_voltages,
@@ -386,7 +434,7 @@ class PhiPlusOptimizer:
                 time.sleep(self.config.settle_seconds)
 
             measurement = self.measure(self.config.measurement_seconds)
-            visibility = measurement.visibility
+            score = self._objective_score(measurement)
             self._log_iteration(
                 voltages,
                 measurement,
@@ -395,18 +443,20 @@ class PhiPlusOptimizer:
                 evaluation_index=evaluation_index,
             )
 
-            if visibility > best_visibility:
-                best_visibility = visibility
+            if score > best_score:
+                best_score = score
                 best_voltages = voltages.copy()
-                self._save_best_state(best_voltages, best_visibility)
+                self._save_best_state(best_voltages, best_score)
 
-            if visibility >= self.config.visibility_target:
+            target = self._objective_target()
+            if score >= target:
                 print(
-                    f"[Alice] QBER optimization reached visibility "
-                    f"{visibility:.3f} >= {self.config.visibility_target:.3f}"
+                    f"[Alice] Optimization reached "
+                    f"{self._normalized_objective_metric()}={score:.3f} "
+                    f">= {target:.3f}"
                 )
                 raise StopIteration
-            return -visibility
+            return -score
 
         parameter_count = int(active_start.size)
         initial_simplex = np.vstack(
@@ -438,10 +488,10 @@ class PhiPlusOptimizer:
         print(
             "[Alice] Restoring optimizer best voltages: "
             f"{best_voltages.tolist()} "
-            f"(visibility={best_visibility:.3f})"
+            f"({self._normalized_objective_metric()}={best_score:.3f})"
         )
         self.apply_voltages(best_voltages.tolist())
-        return best_voltages, best_visibility
+        return best_voltages, float(best_score)
 
     def _optimize_nevergrad(
         self,
@@ -484,7 +534,7 @@ class PhiPlusOptimizer:
         optimizer.suggest(active_start.tolist())
 
         best_voltages = start_voltages.copy()
-        best_visibility = -np.inf
+        best_score = -np.inf
         previous_voltages: np.ndarray | None = None
 
         print(
@@ -514,8 +564,8 @@ class PhiPlusOptimizer:
                 time.sleep(self.config.settle_seconds)
 
             measurement = self.measure(self.config.measurement_seconds)
-            visibility = float(measurement.visibility)
-            optimizer.tell(candidate, -visibility)
+            score = self._objective_score(measurement)
+            optimizer.tell(candidate, -score)
             self._log_iteration(
                 voltages,
                 measurement,
@@ -524,25 +574,27 @@ class PhiPlusOptimizer:
                 evaluation_index=evaluation_index,
             )
 
-            if visibility > best_visibility:
-                best_visibility = visibility
+            if score > best_score:
+                best_score = score
                 best_voltages = voltages.copy()
-                self._save_best_state(best_voltages, best_visibility)
+                self._save_best_state(best_voltages, best_score)
 
-            if visibility >= self.config.visibility_target:
+            target = self._objective_target()
+            if score >= target:
                 print(
-                    f"[Alice] Nevergrad reached visibility "
-                    f"{visibility:.3f} >= {self.config.visibility_target:.3f}"
+                    f"[Alice] Nevergrad reached "
+                    f"{self._normalized_objective_metric()}={score:.3f} "
+                    f">= {target:.3f}"
                 )
                 break
 
         print(
             "[Alice] Restoring Nevergrad best measured voltages: "
             f"{best_voltages.tolist()} "
-            f"(visibility={best_visibility:.3f})"
+            f"({self._normalized_objective_metric()}={best_score:.3f})"
         )
         self.apply_voltages(best_voltages.tolist())
-        return best_voltages, float(best_visibility)
+        return best_voltages, float(best_score)
 
     def _quantize(self, values: np.ndarray) -> np.ndarray:
         step = self.config.voltage_quantization
@@ -560,7 +612,8 @@ class PhiPlusOptimizer:
             state = {
                 "qber": {
                     "best_V": [65.0] * 8,
-                    "best_visibility": self.config.visibility_target,
+                    "best_score": self._objective_target(),
+                    "objective_metric": self._normalized_objective_metric(),
                     "optimizer_backend": self._normalized_backend(),
                     "optimizer_name": self._optimizer_name(),
                     "optimize_epcs": self.config.optimize_epcs,
@@ -576,12 +629,13 @@ class PhiPlusOptimizer:
     def _save_best_state(
         self,
         best_voltages: np.ndarray,
-        best_visibility: float,
+        best_score: float,
     ) -> None:
         state = {
             "qber": {
                 "best_V": best_voltages.tolist(),
-                "best_visibility": float(best_visibility),
+                "best_score": float(best_score),
+                "objective_metric": self._normalized_objective_metric(),
                 "optimizer_backend": self._normalized_backend(),
                 "optimizer_name": self._optimizer_name(),
                 "optimize_epcs": self.config.optimize_epcs,
@@ -616,6 +670,9 @@ class PhiPlusOptimizer:
                 "optimizer_name": optimizer_name,
                 "optimize_epcs": self.config.optimize_epcs,
                 "evaluation_index": evaluation_index,
+                "objective_metric": self._normalized_objective_metric(),
+                "objective_score": self._objective_score(measurement),
+                "objective_target": self._objective_target(),
                 "voltages": json.dumps(voltages.tolist()),
                 "visibility": float(measurement.visibility),
                 "QBER": float(measurement.qber_total),
