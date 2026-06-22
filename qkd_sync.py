@@ -353,6 +353,39 @@ def find_best_delay(
     return best_delay_ps, delay_scan
 
 
+def find_best_delay_near(
+    alice_ps: np.ndarray,
+    bob_ps: np.ndarray,
+    center_ps: float,
+    half_range_ps: float,
+    *,
+    step_ps: float = FINE_STEP_PS,
+    capture_scan: bool = False,
+    coincidence_window_ps: float = FINE_WINDOW_PS,
+) -> tuple[float, DelayScanResult | None]:
+    """Find a delay peak within a bounded range around a previous delay."""
+    if half_range_ps < 0:
+        raise ValueError("Delay search half-range cannot be negative")
+    if alice_ps.size == 0 or bob_ps.size == 0:
+        return float(center_ps), None
+
+    delays, counts = scan_delays(
+        alice_ps,
+        bob_ps,
+        coincidence_window_ps,
+        center_ps - half_range_ps,
+        center_ps + half_range_ps,
+        step_ps,
+    )
+    best_delay_ps = (
+        float(delays[int(np.argmax(counts))])
+        if counts.size and int(np.max(counts)) > 0
+        else float(center_ps)
+    )
+    delay_scan = DelayScanResult(delays, counts) if capture_scan else None
+    return best_delay_ps, delay_scan
+
+
 def collect_coincidences(
     alice_ps: np.ndarray,
     bob_ps: np.ndarray,
@@ -396,10 +429,17 @@ def analyze_sync_coincidences(
     capture_delay_scans: bool = False,
     fixed_delays_ps: Mapping[str, float] | None = None,
     delay_reference_pairs: Mapping[str, str] | None = None,
+    delay_search_centers_ps: Mapping[str, float] | None = None,
+    delay_search_half_range_ps: float = 3_000.0,
+    delay_search_step_ps: float = FINE_STEP_PS,
 ) -> SyncCoincidenceAnalysis:
     """Decode sync markers, map Bob timetags onto Alice's clock, and count pairs."""
     pairs = normalize_pairs(coincidence_pairs)
     pairs_by_name = {pair.name: pair for pair in pairs}
+    if fixed_delays_ps is not None and delay_search_centers_ps is not None:
+        raise ValueError(
+            "Use either fixed delays or local delay-search centers, not both"
+        )
     if fixed_delays_ps is not None:
         missing_delays = [
             pair.name for pair in pairs if pair.name not in fixed_delays_ps
@@ -425,6 +465,21 @@ def analyze_sync_coincidences(
             raise ValueError(
                 "Delay-reference mapping contains unknown reference pairs: "
                 + ", ".join(unknown_references)
+            )
+    if delay_search_centers_ps is not None:
+        reference_names = {
+            delay_reference_pairs[pair.name]
+            if delay_reference_pairs is not None
+            else pair.name
+            for pair in pairs
+        }
+        missing_centers = sorted(
+            reference_names - set(delay_search_centers_ps)
+        )
+        if missing_centers:
+            raise ValueError(
+                "Local delay-search centers are missing reference pairs: "
+                + ", ".join(missing_centers)
             )
 
     alice_path = Path(alice_path)
@@ -465,12 +520,25 @@ def analyze_sync_coincidences(
         )
         for reference_name in reference_names:
             reference_pair = pairs_by_name[reference_name]
-            scanned_delays[reference_name] = find_best_delay(
-                alice_channels[reference_pair.alice_channel],
-                bob_channels[reference_pair.bob_channel],
-                capture_scan=capture_delay_scans,
-                coincidence_window_ps=coincidence_window_ps,
-            )
+            alice_reference = alice_channels[reference_pair.alice_channel]
+            bob_reference = bob_channels[reference_pair.bob_channel]
+            if delay_search_centers_ps is None:
+                scanned_delays[reference_name] = find_best_delay(
+                    alice_reference,
+                    bob_reference,
+                    capture_scan=capture_delay_scans,
+                    coincidence_window_ps=coincidence_window_ps,
+                )
+            else:
+                scanned_delays[reference_name] = find_best_delay_near(
+                    alice_reference,
+                    bob_reference,
+                    delay_search_centers_ps[reference_name],
+                    delay_search_half_range_ps,
+                    step_ps=delay_search_step_ps,
+                    capture_scan=capture_delay_scans,
+                    coincidence_window_ps=coincidence_window_ps,
+                )
         if capture_delay_scans and delay_reference_pairs is not None:
             for pair in pairs:
                 if pair.name in reference_names:

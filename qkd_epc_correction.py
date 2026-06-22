@@ -344,19 +344,12 @@ class PhiPlusOptimizer:
 
         while True:
             loop_index += 1
-            print(
-                "[Alice] Optimizer monitor using current hardware state; "
-                f"stored best voltages={best_voltages.tolist()}"
-            )
             measurement = self.measure(monitor_seconds)
             score = self._objective_score(measurement)
             print(
-                f"[Alice] Optimizer check #{loop_index}: "
-                f"objective {objective_metric}={score:.3f}, "
-                f"total visibility={measurement.visibility:.3f}, "
-                f"QBER={100.0 * measurement.qber_total:.2f}%, "
-                f"total coincidences={measurement.total_coincidences}, "
-                f"stored best score={best_score:.3f}"
+                f"[Optimizer] Check #{loop_index} | "
+                f"{objective_metric}={score:.3f} | "
+                f"best={best_score:.3f} | target={target:.3f}"
             )
 
             if score >= target:
@@ -373,8 +366,7 @@ class PhiPlusOptimizer:
                 base_step=self.config.base_step_volts,
             )
             print(
-                f"[Alice] Objective {objective_metric} below target by "
-                f"{target - score:.3f}; optimizing with step={step:.1f} V"
+                f"[Optimizer] Starting search | step={step:.1f} V"
             )
             best_voltages, best_score = self._optimize(
                 best_voltages,
@@ -424,9 +416,9 @@ class PhiPlusOptimizer:
                 and np.array_equal(voltages, previous_voltages)
             )
             print(
-                f"[Alice] Optimizer candidate #{evaluation_index}: "
-                f"{voltages.tolist()}"
-                + (" (same as previous candidate)" if repeated else "")
+                f"[Optimizer] Candidate #{evaluation_index} | "
+                f"voltages={voltages.tolist()}"
+                + (" | repeated" if repeated else "")
             )
             previous_voltages = voltages.copy()
             self.apply_voltages(voltages.tolist())
@@ -538,8 +530,8 @@ class PhiPlusOptimizer:
         previous_voltages: np.ndarray | None = None
 
         print(
-            f"[Alice] Starting Nevergrad optimizer {optimizer_name} with "
-            f"budget={self.config.nevergrad_budget}, step={step:.1f} V"
+            f"[Optimizer] {optimizer_name} | "
+            f"budget={self.config.nevergrad_budget} | step={step:.1f} V"
         )
 
         for evaluation_index in range(1, self.config.nevergrad_budget + 1):
@@ -553,9 +545,9 @@ class PhiPlusOptimizer:
                 and np.array_equal(voltages, previous_voltages)
             )
             print(
-                f"[Alice] Nevergrad {optimizer_name} candidate "
-                f"#{evaluation_index}: {voltages.tolist()}"
-                + (" (same as previous candidate)" if repeated else "")
+                f"[Optimizer] Candidate #{evaluation_index} | "
+                f"voltages={voltages.tolist()}"
+                + (" | repeated" if repeated else "")
             )
             previous_voltages = voltages.copy()
 
@@ -650,7 +642,6 @@ class PhiPlusOptimizer:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w") as handle:
             json.dump(state, handle, indent=2)
-        print(f"[Alice] Saved optimizer state to {path}")
 
     def _log_iteration(
         self,

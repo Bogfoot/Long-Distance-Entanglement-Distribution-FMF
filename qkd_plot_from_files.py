@@ -16,7 +16,7 @@ DEFAULT_CSV_FILES = (
 )
 CSV_FILE: Path | None = None
 REFRESH_INTERVAL_SECONDS = 2.0
-HISTORY_ROWS = 50  # Set to 0 to display all rows.
+HISTORY_ROWS = 0  # Set to 0 to display all rows.
 LIVE_UPDATE = True
 SAVE_PATH: Path | None = None
 PAIR_TREND_WINDOW = 5  # Set to 0 or 1 to disable.

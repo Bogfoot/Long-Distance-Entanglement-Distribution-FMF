@@ -26,9 +26,12 @@ def init_epc(
 ) -> Any:
     polarization_device = load_polarization_device_class()
     epc = polarization_device(device_ref)
+    initialize_outputs = getattr(epc, "initialize_outputs", None)
+    if initialize_outputs is not None:
+        initialize_outputs()
     if start_temperature is not None:
-        print(f"[{name}] Setting EPC temperature to {start_temperature}")
         epc.set_temperature(start_temperature)
+    print(f"[{name}] EPC initialized")
     return epc
 
 
@@ -38,7 +41,7 @@ def validate_voltages(values: Sequence[float]) -> list[float]:
             f"Expected four EPC voltages, received {len(values)} values"
         )
 
-    voltages = [round(float(v),5) for v in values]
+    voltages = [float(v) for v in values]
     for voltage in voltages:
         if voltage < 0.0 or voltage > EPC_MAX_VOLTAGE:
             raise ValueError(f"Voltage {voltage} outside 0..{EPC_MAX_VOLTAGE} V")
@@ -57,7 +60,6 @@ def set_epc_voltages(
     for index, voltage in enumerate(checked):
         epc.set_voltage(f"DAC{index}", voltage)
         time.sleep(EPC_STEP_DELAY)
-    print(f"[{name}] EPC voltages set to {checked}")
     return checked
 
 

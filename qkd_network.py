@@ -6,6 +6,7 @@ import socket
 import struct
 from pathlib import Path
 
+SHOW_TRANSFER_PROGRESS = False
 CHUNK_SIZE = 1024 * 1024
 
 
@@ -60,8 +61,10 @@ def send_file(sock: socket.socket, path: Path, metadata: dict | None = None) -> 
                 break
             sock.sendall(chunk)
             sent += len(chunk)
-            print(f"\rSent {sent}/{size} bytes", end="", flush=True)
-    print()
+            if SHOW_TRANSFER_PROGRESS:
+                print(f"\rSent {sent}/{size} bytes", end="", flush=True)
+    if SHOW_TRANSFER_PROGRESS:
+        print()
 
 
 def receive_file(sock: socket.socket, out_dir: Path) -> tuple[Path, dict, bool]:
@@ -83,7 +86,9 @@ def receive_file(sock: socket.socket, out_dir: Path) -> tuple[Path, dict, bool]:
             f.write(chunk)
             hasher.update(chunk)
             received += len(chunk)
-            print(f"\rReceived {received}/{size} bytes", end="", flush=True)
-    print()
+            if SHOW_TRANSFER_PROGRESS:
+                print(f"\rReceived {received}/{size} bytes", end="", flush=True)
+    if SHOW_TRANSFER_PROGRESS:
+        print()
 
     return out_path, header, hasher.hexdigest() == expected_sha256

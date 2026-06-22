@@ -75,12 +75,11 @@ def _record_alice_file(
     config.alice_record_dir.mkdir(parents=True, exist_ok=True)
     path = _alice_recording_path(config, duration_seconds, record_id)
 
-    print(f"[Alice] Armed record_id={record_id}; waiting until {start_time_utc}")
     sleep_until_utc(start_time_utc)
 
     print(
-        f"[Alice] Recording {duration_seconds:.1f} s "
-        f"with record_id={record_id} to {path}"
+        f"[Alice] Recording started | record_id={record_id} | "
+        f"duration={duration_seconds:.1f} s"
     )
     tagger.setExposureTime(int(duration_seconds * 1000))
     tagger.writeTimestamps(str(path), tagger.FILEFORMAT_BINARY)
@@ -128,10 +127,6 @@ def acquire_pair(
         ) from exc
 
     with connection:
-        print(
-            f"[Alice] Requesting Bob recording record_id={selected_record_id}, "
-            f"start_time_utc={start_time_utc}"
-        )
         send_json(connection, command)
         alice_path = _record_alice_file(
             tagger,
@@ -167,8 +162,9 @@ def acquire_pair(
             )
 
         print(
-            f"[Alice] Saved Bob file {bob_path} ({header['size']} bytes), "
-            f"record_id={selected_record_id}"
+            f"[Alice] Recording complete | record_id={selected_record_id} | "
+            f"Alice={alice_path.stat().st_size / 1_000_000:.1f} MB | "
+            f"Bob={header['size'] / 1_000_000:.1f} MB"
         )
         return AcquisitionPair(
             record_id=selected_record_id,
@@ -206,6 +202,5 @@ def delete_acquisition_files(
     for path in (acquisition.alice_path, acquisition.bob_path):
         try:
             path.unlink(missing_ok=True)
-            print(f"[Alice] Deleted optimizer recording: {path}")
         except OSError as exc:
             print(f"[Alice] Could not delete optimizer recording {path}: {exc}")

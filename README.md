@@ -231,7 +231,22 @@ When `SYNC_PROCESSING.save_initial_delay_scan=True`, Alice captures fine-delay s
 Data/DelayScans/initial_delay_scans_<record_id>.png
 ```
 
-Later passive or optimizer measurements still find their delays normally but do not retain scan arrays or create more figures.
+Later passive or optimizer measurements recheck the delay on every acquisition,
+but use a narrow search around the initial calibration instead of repeating the
+full broad scan. Configure the local search in `Alice.py`:
+
+```python
+SYNC_PROCESSING = SyncProcessingConfig(
+    # ...
+    delay_recheck_half_range_ps=3_000.0,  # ±3 ns
+    delay_recheck_step_ps=100.0,
+)
+```
+
+The initial centers remain fixed for the process lifetime, preventing noisy
+peaks from walking the search range over time. Alice reports the fresh delays
+and warns when a peak reaches the local-search boundary. Only the first broad
+scan retains arrays and creates a delay-scan figure.
 
 `qkd_epc_correction.PhiPlusOptimizer` implements the optional correction loop based on the local `Stability_Check_and_Record.py` approach:
 
@@ -254,6 +269,8 @@ Configure the backend near the top of `Alice.py`:
 OPTIMIZER = OptimizerConfig(
     backend="nevergrad",       # "nevergrad" or "nelder-mead"
     optimize_epcs="both",      # "alice", "bob", or "both"
+    objective_metric="vis_DA", # "visibility", "vis_HV", or "vis_DA"
+    objective_target=0.95,     # target for the selected metric
     measurement_seconds=5.0,
     base_step_volts=25.0,
     nevergrad_optimizer="TBPSA",  # for example "TBPSA" or "NGOpt"
@@ -271,7 +288,18 @@ OPTIMIZER = OptimizerConfig(
 The optimizer state and iteration CSV always retain the complete eight-voltage
 vector, including the fixed values when only one EPC is optimized.
 
-Nevergrad uses its sequential `ask`/`tell` interface because Alice can run only one paired hardware acquisition at a time. The objective passed to Nevergrad is `-visibility`, since Nevergrad minimizes. `TBPSA` is the default noise-oriented choice; `NGOpt` is a reasonable adaptive alternative.
+`objective_metric` selects the quantity that the optimizer maximizes:
+
+- `"visibility"` maximizes the mean of H/V and D/A visibility;
+- `"vis_HV"` maximizes only H/V visibility;
+- `"vis_DA"` maximizes only D/A visibility.
+
+`objective_target` is compared against the selected metric. Total visibility,
+QBER, and all coincidence counts are still measured and logged. The optimizer
+state stores the selected metric with its best score, so a best score from a
+different objective is not reused.
+
+Nevergrad uses its sequential `ask`/`tell` interface because Alice can run only one paired hardware acquisition at a time. The selected score is negated before it is passed to Nevergrad, since Nevergrad minimizes. `TBPSA` is the default noise-oriented choice; `NGOpt` is a reasonable adaptive alternative.
 
 Nevergrad optimizer names are case-sensitive and depend on the installed
 Nevergrad version. Print every available optimizer on Alice with:
