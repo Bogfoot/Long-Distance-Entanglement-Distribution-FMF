@@ -51,10 +51,10 @@ QBER_OPTIMIZATION_ENABLED = True
 
 # Format: (label, Alice channel, Bob channel)
 QKD_COINCIDENCE_PAIRS = (
-    ("HH", 4, 1),
-    ("HV", 4, 2),
-    ("VH", 2, 1),
-    ("VV", 2, 2),
+    ("HH", 4, 2),
+    ("HV", 4, 1),
+    ("VH", 2, 2),
+    ("VV", 2, 1),
     ("DD", 1, 4),
     ("DA", 1, 3),
     ("AD", 3, 4),
@@ -96,7 +96,7 @@ SYNC_PROCESSING = SyncProcessingConfig(
     sync_channel=DEFAULT_SYNC_CHANNEL,
     coincidence_window_ps=700.0,
     coincidence_pairs=QKD_COINCIDENCE_PAIRS,
-    delay_reference_pairs=QKD_DELAY_REFERENCE_PAIRS,
+    delay_reference_pairs=None,
     store_coincidence_timetags=False,
     coincidence_timetag_dir=DATA_DIR / "CoincidenceTimetags",
     save_initial_delay_scan=True,
@@ -111,7 +111,7 @@ CORRECTION_LOGS = CorrectionLogPaths(
 
 OPTIMIZER = OptimizerConfig(
     backend="nevergrad",  # "nelder-mead" or "nevergrad"
-    optimize_epcs="both",  # "alice", "bob", or "both"
+    optimize_epcs="Alice",  # "alice", "bob", or "both"
     objective_metric="vis_DA",  # "visibility", "vis_HV", or "vis_DA"
     objective_target=0.9,
     measurement_seconds=10.0,

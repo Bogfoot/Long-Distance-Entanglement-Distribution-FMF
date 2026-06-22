@@ -307,7 +307,7 @@ class MeasurementPlot:
         )
         self.visibility_ax.set_ylim(-1.05, 1.05)
         self.visibility_ax.axhline(
-            0.95,
+            0.9,
             color="#666666",
             linestyle="--",
             linewidth=1,
