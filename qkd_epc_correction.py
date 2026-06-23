@@ -101,10 +101,15 @@ class PhiPlusCorrectionResult:
         counters = self.sync.clock_map.counters
         skew = self.sync.clock_map.segment_skew_ppm
         row: dict[str, float | int | str] = {
-            "timestamp": time.time(),
+            "timestamp": (
+                self.sync.measurement_timestamp_s
+                if self.sync.measurement_timestamp_s is not None
+                else time.time()
+            ),
             "alice_file": self.sync.alice_path.name,
             "bob_file": self.sync.bob_path.name,
             "overlap_duration_sec": self.sync.overlap_duration_s,
+            "analysis_exposure_count": self.sync.exposure_count,
             "sync_common_markers": int(counters.size),
             "sync_first_counter": int(counters[0]) if counters.size else -1,
             "sync_last_counter": int(counters[-1]) if counters.size else -1,

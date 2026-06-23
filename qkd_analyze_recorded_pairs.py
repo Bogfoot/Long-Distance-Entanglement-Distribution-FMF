@@ -3,23 +3,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import coincfinder
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 
 from Alice import ACQUISITION, SYNC_PROCESSING
-from qkd_sync import (
-    PS_PER_SECOND,
-    align_bob_to_alice,
-    build_clock_map,
-    collect_coincidences,
-    decode_file,
-    find_best_delay,
-    flatten_channel,
-    normalize_pairs,
-    trim_to_range,
-)
+from qkd_sync import analyze_sync_coincidence_exposures
 
 
 # File selection and plotting are local. Exposure and synchronization settings
@@ -54,140 +42,6 @@ def select_recording() -> tuple[str, Path, Path]:
 
     record_id = RECORD_ID or complete[-1]
     return record_id, alice_files[record_id], bob_files[record_id]
-
-
-def slice_exposure(
-    timestamps: np.ndarray,
-    start_ps: float,
-    end_ps: float,
-) -> np.ndarray:
-    first = np.searchsorted(timestamps, start_ps, side="left")
-    last = np.searchsorted(timestamps, end_ps, side="left")
-    return timestamps[first:last]
-
-
-def visibility(correlated: int, errors: int) -> float:
-    total = correlated + errors
-    return (correlated - errors) / total if total else 0.0
-
-
-def analyze_exposure(
-    exposure_index: int,
-    relative_start_seconds: float,
-    duration_seconds: float,
-    alice_channels: dict[int, np.ndarray],
-    bob_channels: dict[int, np.ndarray],
-    pairs,
-) -> dict[str, object]:
-    pairs_by_name = {pair.name: pair for pair in pairs}
-    delay_references = SYNC_PROCESSING.delay_reference_pairs
-
-    # Every exposure gets new delay scans. Alice.py decides whether pairs use
-    # their own scan or share a reference-pair scan.
-    reference_names = list(
-        dict.fromkeys(
-            delay_references[pair.name]
-            if delay_references is not None
-            else pair.name
-            for pair in pairs
-        )
-    )
-    scanned_delays = {}
-    for name in reference_names:
-        pair = pairs_by_name[name]
-        scanned_delays[name], _ = find_best_delay(
-            alice_channels[pair.alice_channel],
-            bob_channels[pair.bob_channel],
-            coincidence_window_ps=SYNC_PROCESSING.coincidence_window_ps,
-        )
-
-    counts = {}
-    delays = {}
-    for pair in pairs:
-        reference_name = (
-            delay_references[pair.name]
-            if delay_references is not None
-            else pair.name
-        )
-        delay_ps = scanned_delays[reference_name]
-        delays[pair.name] = delay_ps
-        counts[pair.name] = int(
-            collect_coincidences(
-                alice_channels[pair.alice_channel],
-                bob_channels[pair.bob_channel],
-                delay_ps,
-                SYNC_PROCESSING.coincidence_window_ps,
-            ).shape[0]
-        )
-
-    vis_hv = visibility(
-        counts["HH"] + counts["VV"],
-        counts["HV"] + counts["VH"],
-    )
-    vis_da = visibility(
-        counts["DD"] + counts["AA"],
-        counts["DA"] + counts["AD"],
-    )
-
-    row: dict[str, object] = {
-        "exposure_index": exposure_index,
-        "start_seconds": relative_start_seconds,
-        "exposure_seconds": duration_seconds,
-        "visibility": (vis_hv + vis_da) / 2.0,
-        "vis_HV": vis_hv,
-        "vis_DA": vis_da,
-        "QBER_total": (1.0 - (vis_hv + vis_da) / 2.0) / 2.0,
-    }
-
-    for name in PAIR_ORDER:
-        row[f"C_{name}"] = counts[name]
-        row[f"cps_{name}"] = counts[name] / duration_seconds
-        row[f"delay_{name}_ps"] = delays[name]
-
-    for channel, timestamps in sorted(alice_channels.items()):
-        row[f"alice_ch{channel}_singles"] = timestamps.size
-        row[f"alice_ch{channel}_cps"] = timestamps.size / duration_seconds
-
-    for channel, timestamps in sorted(bob_channels.items()):
-        row[f"bob_ch{channel}_singles"] = timestamps.size
-        row[f"bob_ch{channel}_cps"] = timestamps.size / duration_seconds
-
-    print(
-        f"Exposure {exposure_index}: t={relative_start_seconds:.1f} s, "
-        f"visibility={100 * row['visibility']:.2f}%, "
-        f"HV={100 * vis_hv:.2f}%, DA={100 * vis_da:.2f}%"
-    )
-    print(
-        "  Coincidences: "
-        + "  ".join(
-            f"{name}={counts[name]} ({counts[name] / duration_seconds:.2f}/s)"
-            for name in PAIR_ORDER
-        )
-    )
-    print(
-        "  Delays: "
-        + "  ".join(
-            f"{name}={delays[name] / 1000.0:+.3f} ns"
-            for name in PAIR_ORDER
-        )
-    )
-    print(
-        "  Alice singles: "
-        + "  ".join(
-            f"ch{channel}={timestamps.size} "
-            f"({timestamps.size / duration_seconds:.1f}/s)"
-            for channel, timestamps in sorted(alice_channels.items())
-        )
-    )
-    print(
-        "  Bob singles: "
-        + "  ".join(
-            f"ch{channel}={timestamps.size} "
-            f"({timestamps.size / duration_seconds:.1f}/s)"
-            for channel, timestamps in sorted(bob_channels.items())
-        )
-    )
-    return row
 
 
 def plot_results(data: pd.DataFrame, output_path: Path) -> None:
@@ -250,79 +104,70 @@ def plot_results(data: pd.DataFrame, output_path: Path) -> None:
         plt.show()
 
 
+def exposure_row(analysis) -> dict[str, object]:
+    results = analysis.results_by_name
+    counts = {name: results[name].count for name in PAIR_ORDER}
+    duration = analysis.overlap_duration_s
+    hv_correlated = counts["HH"] + counts["VV"]
+    hv_errors = counts["HV"] + counts["VH"]
+    da_correlated = counts["DD"] + counts["AA"]
+    da_errors = counts["DA"] + counts["AD"]
+    vis_hv = (
+        (hv_correlated - hv_errors) / (hv_correlated + hv_errors)
+        if hv_correlated + hv_errors
+        else 0.0
+    )
+    vis_da = (
+        (da_correlated - da_errors) / (da_correlated + da_errors)
+        if da_correlated + da_errors
+        else 0.0
+    )
+    row: dict[str, object] = {
+        "exposure_index": analysis.exposure_index,
+        "start_seconds": analysis.exposure_start_s,
+        "exposure_seconds": duration,
+        "visibility": (vis_hv + vis_da) / 2.0,
+        "vis_HV": vis_hv,
+        "vis_DA": vis_da,
+        "QBER_total": (1.0 - (vis_hv + vis_da) / 2.0) / 2.0,
+    }
+    for name in PAIR_ORDER:
+        result = results[name]
+        row[f"C_{name}"] = result.count
+        row[f"cps_{name}"] = result.count / duration
+        row[f"delay_{name}_ps"] = result.best_delay_ps
+    for result in analysis.pair_results:
+        alice_channel = result.pair.alice_channel
+        bob_channel = result.pair.bob_channel
+        row[f"alice_ch{alice_channel}_cps"] = (
+            result.alice_event_count / duration
+        )
+        row[f"bob_ch{bob_channel}_cps"] = result.bob_event_count / duration
+    return row
+
+
 def main() -> None:
     record_id, alice_path, bob_path = select_recording()
-    pairs = normalize_pairs(SYNC_PROCESSING.coincidence_pairs)
-
-    print(f"Record ID: {record_id}")
-    print(f"Alice file: {alice_path}")
-    print(f"Bob file:   {bob_path}")
-    print("Building one clock map for the complete recording...")
-
-    alice_decode = decode_file(alice_path, SYNC_PROCESSING.sync_channel)
-    bob_decode = decode_file(bob_path, SYNC_PROCESSING.sync_channel)
-    clock_map = build_clock_map(alice_decode, bob_decode)
-
-    alice_file_channels, _ = coincfinder.read_file_auto(str(alice_path))
-    bob_file_channels, _ = coincfinder.read_file_auto(str(bob_path))
-    full_alice_channels = {
-        channel: trim_to_range(
-            flatten_channel(alice_file_channels, channel),
-            clock_map.alice_times_ps[0],
-            clock_map.alice_times_ps[-1],
-        )
-        for channel in {pair.alice_channel for pair in pairs}
-    }
-    full_bob_channels = {
-        channel: align_bob_to_alice(
-            flatten_channel(bob_file_channels, channel),
-            clock_map,
-        )
-        for channel in {pair.bob_channel for pair in pairs}
-    }
-
-    overlap_start = clock_map.alice_times_ps[0]
-    overlap_end = clock_map.alice_times_ps[-1]
-    exposure_ps = EXPOSURE_SECONDS * PS_PER_SECOND
-    rows = []
-    exposure_index = 0
-    exposure_start = overlap_start
-
-    while exposure_start < overlap_end:
-        exposure_end = min(exposure_start + exposure_ps, overlap_end)
-        duration_seconds = (exposure_end - exposure_start) / PS_PER_SECOND
-        if (
-            duration_seconds < EXPOSURE_SECONDS
-            and not INCLUDE_PARTIAL_LAST_EXPOSURE
-        ):
-            break
-
-        exposure_index += 1
-        alice_channels = {
-            channel: slice_exposure(values, exposure_start, exposure_end)
-            for channel, values in full_alice_channels.items()
-        }
-        bob_channels = {
-            channel: slice_exposure(values, exposure_start, exposure_end)
-            for channel, values in full_bob_channels.items()
-        }
-        rows.append(
-            analyze_exposure(
-                exposure_index,
-                (exposure_start - overlap_start) / PS_PER_SECOND,
-                duration_seconds,
-                alice_channels,
-                bob_channels,
-                pairs,
-            )
-        )
-        exposure_start = exposure_end
-
-    data = pd.DataFrame(rows)
+    print(f"Analyzing record_id={record_id}")
+    analyses = analyze_sync_coincidence_exposures(
+        alice_path,
+        bob_path,
+        SYNC_PROCESSING.coincidence_pairs,
+        SYNC_PROCESSING.analysis_exposure_seconds,
+        sync_channel=SYNC_PROCESSING.sync_channel,
+        coincidence_window_ps=SYNC_PROCESSING.coincidence_window_ps,
+        delay_reference_pairs=SYNC_PROCESSING.delay_reference_pairs,
+        include_partial_last_exposure=INCLUDE_PARTIAL_LAST_EXPOSURE,
+    )
+    data = pd.DataFrame(exposure_row(analysis) for analysis in analyses)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     output_csv = OUTPUT_DIR / f"recorded_exposures_{record_id}.csv"
     output_plot = OUTPUT_DIR / f"recorded_exposures_{record_id}.png"
     data.to_csv(output_csv, index=False)
+    print(
+        f"Processed {len(data)} exposures of "
+        f"{SYNC_PROCESSING.analysis_exposure_seconds:g} s"
+    )
     print(f"Saved results: {output_csv}")
     plot_results(data, output_plot)
 

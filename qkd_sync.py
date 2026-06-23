@@ -97,6 +97,11 @@ class SyncCoincidenceAnalysis:
     clock_map: ClockMap
     pair_results: list[CoincidenceResult]
     coincidence_window_ps: float
+    exposure_index: int | None = None
+    exposure_start_s: float = 0.0
+    duration_override_s: float | None = None
+    measurement_timestamp_s: float | None = None
+    exposure_count: int = 1
 
     @property
     def results_by_name(self) -> dict[str, CoincidenceResult]:
@@ -104,6 +109,8 @@ class SyncCoincidenceAnalysis:
 
     @property
     def overlap_duration_s(self) -> float:
+        if self.duration_override_s is not None:
+            return float(self.duration_override_s)
         return self.clock_map.overlap_duration_s
 
 
@@ -603,6 +610,245 @@ def analyze_sync_coincidences(
         coincidence_window_ps=float(coincidence_window_ps),
     )
 
+
+
+def _slice_exposure(
+    timestamps_ps: np.ndarray,
+    start_ps: float,
+    end_ps: float,
+) -> np.ndarray:
+    first = np.searchsorted(timestamps_ps, start_ps, side="left")
+    last = np.searchsorted(timestamps_ps, end_ps, side="left")
+    return timestamps_ps[first:last]
+
+
+def analyze_sync_coincidence_exposures(
+    alice_path: str | Path,
+    bob_path: str | Path,
+    coincidence_pairs: Iterable[CoincidencePair | tuple[str, int, int]],
+    exposure_seconds: float,
+    *,
+    sync_channel: int = DEFAULT_SYNC_CHANNEL,
+    coincidence_window_ps: float = FINE_WINDOW_PS,
+    delay_reference_pairs: Mapping[str, str] | None = None,
+    include_partial_last_exposure: bool = False,
+    capture_first_delay_scan: bool = False,
+) -> list[SyncCoincidenceAnalysis]:
+    """Align one recording once, then analyze independent exposure windows."""
+    if exposure_seconds <= 0:
+        raise ValueError("Exposure duration must be positive")
+
+    pairs = normalize_pairs(coincidence_pairs)
+    pairs_by_name = {pair.name: pair for pair in pairs}
+    if delay_reference_pairs is not None:
+        missing = [
+            pair.name for pair in pairs if pair.name not in delay_reference_pairs
+        ]
+        unknown = sorted(set(delay_reference_pairs.values()) - set(pairs_by_name))
+        if missing or unknown:
+            raise ValueError(
+                "Invalid delay-reference mapping; missing="
+                f"{missing}, unknown={unknown}"
+            )
+
+    alice_path = Path(alice_path)
+    bob_path = Path(bob_path)
+    alice_decode = decode_file(alice_path, sync_channel)
+    bob_decode = decode_file(bob_path, sync_channel)
+    clock_map = build_clock_map(alice_decode, bob_decode)
+
+    alice_singles, _ = coincfinder.read_file_auto(str(alice_path))
+    bob_singles, _ = coincfinder.read_file_auto(str(bob_path))
+    alice_channels = {
+        channel: np.ascontiguousarray(
+            trim_to_range(
+                flatten_channel(alice_singles, channel),
+                clock_map.alice_times_ps[0],
+                clock_map.alice_times_ps[-1],
+            ),
+            dtype=np.int64,
+        )
+        for channel in {pair.alice_channel for pair in pairs}
+    }
+    bob_channels = {
+        channel: align_bob_to_alice(
+            flatten_channel(bob_singles, channel),
+            clock_map,
+        )
+        for channel in {pair.bob_channel for pair in pairs}
+    }
+
+    overlap_start = float(clock_map.alice_times_ps[0])
+    overlap_end = float(clock_map.alice_times_ps[-1])
+    exposure_ps = exposure_seconds * PS_PER_SECOND
+    analyses: list[SyncCoincidenceAnalysis] = []
+    exposure_start = overlap_start
+    exposure_index = 0
+
+    while exposure_start < overlap_end:
+        exposure_end = min(exposure_start + exposure_ps, overlap_end)
+        duration_s = (exposure_end - exposure_start) / PS_PER_SECOND
+        if duration_s < exposure_seconds and not include_partial_last_exposure:
+            break
+
+        exposure_index += 1
+        alice_bin = {
+            channel: _slice_exposure(values, exposure_start, exposure_end)
+            for channel, values in alice_channels.items()
+        }
+        bob_bin = {
+            channel: _slice_exposure(values, exposure_start, exposure_end)
+            for channel, values in bob_channels.items()
+        }
+
+        reference_names = list(
+            dict.fromkeys(
+                delay_reference_pairs[pair.name]
+                if delay_reference_pairs is not None
+                else pair.name
+                for pair in pairs
+            )
+        )
+        scanned_delays: dict[str, tuple[float, DelayScanResult | None]] = {}
+        diagnostic_scans: dict[str, DelayScanResult | None] = {}
+        capture_scan = capture_first_delay_scan and exposure_index == 1
+
+        for reference_name in reference_names:
+            reference_pair = pairs_by_name[reference_name]
+            scanned_delays[reference_name] = find_best_delay(
+                alice_bin[reference_pair.alice_channel],
+                bob_bin[reference_pair.bob_channel],
+                capture_scan=capture_scan,
+                coincidence_window_ps=coincidence_window_ps,
+            )
+
+        if capture_scan and delay_reference_pairs is not None:
+            for pair in pairs:
+                if pair.name in reference_names:
+                    continue
+                _, diagnostic_scans[pair.name] = find_best_delay(
+                    alice_bin[pair.alice_channel],
+                    bob_bin[pair.bob_channel],
+                    capture_scan=True,
+                    coincidence_window_ps=coincidence_window_ps,
+                )
+
+        pair_results = []
+        for pair in pairs:
+            reference_name = (
+                delay_reference_pairs[pair.name]
+                if delay_reference_pairs is not None
+                else pair.name
+            )
+            best_delay_ps, reference_scan = scanned_delays[reference_name]
+            delay_scan = (
+                reference_scan
+                if pair.name == reference_name
+                else diagnostic_scans.get(pair.name)
+            )
+            alice_ps = alice_bin[pair.alice_channel]
+            bob_ps = bob_bin[pair.bob_channel]
+            coincidences_ps = collect_coincidences(
+                alice_ps,
+                bob_ps,
+                best_delay_ps,
+                coincidence_window_ps,
+            )
+            pair_results.append(
+                CoincidenceResult(
+                    pair=pair,
+                    best_delay_ps=best_delay_ps,
+                    coincidences_ps=coincidences_ps,
+                    delay_scan=delay_scan,
+                    alice_event_count=int(alice_ps.size),
+                    bob_event_count=int(bob_ps.size),
+                    accidental_estimate=estimate_accidentals(
+                        int(alice_ps.size),
+                        int(bob_ps.size),
+                        coincidence_window_ps,
+                        duration_s,
+                    ),
+                )
+            )
+
+        analyses.append(
+            SyncCoincidenceAnalysis(
+                alice_path=alice_path,
+                bob_path=bob_path,
+                alice_decode=alice_decode,
+                bob_decode=bob_decode,
+                clock_map=clock_map,
+                pair_results=pair_results,
+                coincidence_window_ps=float(coincidence_window_ps),
+                exposure_index=exposure_index,
+                exposure_start_s=(exposure_start - overlap_start) / PS_PER_SECOND,
+                duration_override_s=duration_s,
+            )
+        )
+        exposure_start = exposure_end
+
+    return analyses
+
+
+def aggregate_sync_exposures(
+    analyses: list[SyncCoincidenceAnalysis],
+) -> SyncCoincidenceAnalysis:
+    """Combine exposure analyses into one count-weighted recording result."""
+    if not analyses:
+        raise ValueError("Cannot aggregate an empty exposure list")
+
+    first = analyses[0]
+    names = [result.pair.name for result in first.pair_results]
+    pair_results = []
+    for name in names:
+        results = [analysis.results_by_name[name] for analysis in analyses]
+        non_empty = [result.coincidences_ps for result in results if result.count]
+        coincidences = (
+            np.concatenate(non_empty, axis=0)
+            if non_empty
+            else np.empty((0, 2), dtype=np.int64)
+        )
+        counts = np.asarray([result.count for result in results], dtype=float)
+        delays = np.asarray(
+            [result.best_delay_ps for result in results],
+            dtype=float,
+        )
+        best_delay_ps = (
+            float(np.average(delays, weights=counts))
+            if float(np.sum(counts)) > 0
+            else float(np.median(delays))
+        )
+        pair_results.append(
+            CoincidenceResult(
+                pair=results[0].pair,
+                best_delay_ps=best_delay_ps,
+                coincidences_ps=coincidences,
+                alice_event_count=sum(
+                    result.alice_event_count for result in results
+                ),
+                bob_event_count=sum(
+                    result.bob_event_count for result in results
+                ),
+                accidental_estimate=sum(
+                    result.accidental_estimate for result in results
+                ),
+            )
+        )
+
+    return SyncCoincidenceAnalysis(
+        alice_path=first.alice_path,
+        bob_path=first.bob_path,
+        alice_decode=first.alice_decode,
+        bob_decode=first.bob_decode,
+        clock_map=first.clock_map,
+        pair_results=pair_results,
+        coincidence_window_ps=first.coincidence_window_ps,
+        duration_override_s=sum(
+            analysis.overlap_duration_s for analysis in analyses
+        ),
+        measurement_timestamp_s=first.measurement_timestamp_s,
+        exposure_count=len(analyses),
+    )
 
 
 def save_coincidence_timetag_pairs(

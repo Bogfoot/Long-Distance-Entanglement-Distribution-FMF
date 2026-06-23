@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import sys
 import time
 from dataclasses import dataclass
@@ -25,6 +26,8 @@ from qkd_plot_delay_scans import save_delay_scan_plot
 from qkd_sync import (
     DEFAULT_SYNC_CHANNEL,
     SyncCoincidenceAnalysis,
+    aggregate_sync_exposures,
+    analyze_sync_coincidence_exposures,
     analyze_sync_coincidences,
     save_coincidence_timetag_pairs,
 )
@@ -39,7 +42,7 @@ except ImportError as exc:
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "Data"
 
-RECORD_SECONDS = 20.0
+RECORD_SECONDS = 60.0
 PAUSE_BETWEEN_RECORDS = 30 * 60
 ERROR_RETRY_SECONDS = 5.0
 
@@ -47,7 +50,7 @@ ALICE_EPC_ENABLED = True
 ALICE_EPC_DEVICE_REF = 0
 EPC_START_TEMPERATURE = 50.0
 
-QBER_OPTIMIZATION_ENABLED = True
+QBER_OPTIMIZATION_ENABLED = False
 
 # Format: (label, Alice channel, Bob channel)
 QKD_COINCIDENCE_PAIRS = (
@@ -103,7 +106,7 @@ SYNC_PROCESSING = SyncProcessingConfig(
     delay_reference_pairs=None,
     delay_recheck_half_range_ps=3_000.0,
     delay_recheck_step_ps=100.0,
-    analysis_exposure_seconds=0.5,
+    analysis_exposure_seconds=1.0,
     store_coincidence_timetags=False,
     coincidence_timetag_dir=DATA_DIR / "CoincidenceTimetags",
     save_initial_delay_scan=True,
@@ -159,11 +162,77 @@ class MeasurementPipeline:
             delete_acquisition_files(acquisition, ACQUISITION)
         return correction
 
+    def measure_exposures(
+        self,
+        duration_seconds: float,
+        *,
+        delete_raw_files: bool = False,
+    ) -> PhiPlusCorrectionResult:
+        acquisition = acquire_pair(
+            self.tagger,
+            ACQUISITION,
+            duration_seconds,
+        )
+        print(
+            f"[Alice] Processing record_id={acquisition.record_id} in "
+            f"{SYNC_PROCESSING.analysis_exposure_seconds:g} s exposures"
+        )
+        exposures = analyze_sync_coincidence_exposures(
+            acquisition.alice_path,
+            acquisition.bob_path,
+            SYNC_PROCESSING.coincidence_pairs,
+            SYNC_PROCESSING.analysis_exposure_seconds,
+            sync_channel=SYNC_PROCESSING.sync_channel,
+            coincidence_window_ps=SYNC_PROCESSING.coincidence_window_ps,
+            delay_reference_pairs=SYNC_PROCESSING.delay_reference_pairs,
+            include_partial_last_exposure=True,
+            capture_first_delay_scan=(
+                SYNC_PROCESSING.save_initial_delay_scan
+                and not self.initial_delay_scan_saved
+            ),
+        )
+        if not exposures:
+            raise RuntimeError(
+                "Recording overlap is shorter than one analysis exposure"
+            )
+
+        recording_start_s = datetime.datetime.fromisoformat(
+            acquisition.start_time_utc
+        ).timestamp()
+        for exposure in exposures:
+            exposure.measurement_timestamp_s = (
+                recording_start_s + exposure.exposure_start_s
+            )
+
+        if (
+            SYNC_PROCESSING.save_initial_delay_scan
+            and not self.initial_delay_scan_saved
+        ):
+            output_path = (
+                SYNC_PROCESSING.delay_scan_dir
+                / f"initial_delay_scans_{acquisition.record_id}.png"
+            )
+            saved_path = save_delay_scan_plot(exposures[0], output_path)
+            self.initial_delay_scan_saved = True
+            print(f"[Alice] Saved initial delay scans: {saved_path}")
+
+        synchronized = aggregate_sync_exposures(exposures)
+        synchronized.measurement_timestamp_s = recording_start_s
+        correction = analyze_phi_plus_coincidences(synchronized)
+        append_correction_result(correction, CORRECTION_LOGS.results_csv)
+        self._print_summary(acquisition, correction)
+        if delete_raw_files:
+            delete_acquisition_files(acquisition, ACQUISITION)
+        return correction
+
     def measure_for_optimizer(
         self,
         duration_seconds: float,
     ) -> PhiPlusCorrectionResult:
-        return self.measure(duration_seconds, delete_raw_files=True)
+        return self.measure_exposures(
+            duration_seconds,
+            delete_raw_files=True,
+        )
 
     def _synchronize(
         self,
@@ -252,6 +321,7 @@ class MeasurementPipeline:
             f"DA vis={100 * correction.basis_visibility['DA']:.3f}% | "
             f"QBER={100.0 * correction.qber_total:.2f}% | "
             f"total={correction.total_coincidences} | "
+            f"exposures={correction.sync.exposure_count} | "
             f"sync markers={correction.sync.clock_map.counters.size}"
         )
         print(
@@ -309,7 +379,7 @@ def apply_correction_voltages(alice_epc, values: list[float]) -> None:
 def run_passive_measurements(pipeline: MeasurementPipeline) -> None:
     while True:
         try:
-            pipeline.measure(RECORD_SECONDS)
+            pipeline.measure_exposures(RECORD_SECONDS)
             time.sleep(PAUSE_BETWEEN_RECORDS)
         except KeyboardInterrupt:
             raise
