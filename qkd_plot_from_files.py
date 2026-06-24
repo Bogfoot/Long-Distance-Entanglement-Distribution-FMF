@@ -269,14 +269,7 @@ class MeasurementPlot:
             linestyle="None",
             label="Total",
         )
-        self.visibility_ax.plot(
-            x,
-            series.visibility_total,
-            color="black",
-            marker=".",
-            linestyle="None",
-            label="Total visibility",
-        )
+        
         self.visibility_ax.plot(
             x,
             series.visibility_hv,
@@ -292,6 +285,14 @@ class MeasurementPlot:
             marker=".",
             linestyle="None",
             label="D/A visibility",
+        )
+        self.visibility_ax.plot(
+            x,
+            series.visibility_total,
+            color="black",
+            marker=".",
+            linestyle="None",
+            label="Total visibility",
         )
 
         self.pairs_ax.set_title(
@@ -311,7 +312,7 @@ class MeasurementPlot:
             color="#666666",
             linestyle="--",
             linewidth=1,
-            label="0.95 target",
+            label="0.9 target",
         )
 
         for axis in (self.pairs_ax, self.total_ax, self.visibility_ax):

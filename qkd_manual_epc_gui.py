@@ -120,17 +120,16 @@ class ManualMeasurementEngine:
                 )
             print(f"[GUI] Bob EPC voltages set to {bob_voltages}")
 
+    def record(self, duration_seconds: float) -> AcquisitionPair:
+        tagger = self.ensure_tagger()
+        return acquire_pair(tagger, ACQUISITION, duration_seconds)
+
     def measure(self, settings: MeasurementSettings) -> MeasurementEvent:
         self.apply_voltages(settings)
         if settings.settle_seconds > 0:
             time.sleep(settings.settle_seconds)
 
-        tagger = self.ensure_tagger()
-        acquisition = acquire_pair(
-            tagger,
-            ACQUISITION,
-            settings.exposure_seconds,
-        )
+        acquisition = self.record(settings.exposure_seconds)
         success = False
         try:
             synchronized = analyze_sync_coincidences(
@@ -236,6 +235,8 @@ class ManualEpcGui:
         self.events: queue.Queue[tuple[str, object]] = queue.Queue()
         self.busy = False
         self.continuous = False
+        self.record_requested = False
+        self.active_event_name: str | None = None
         self.closing = False
         self.measurement_number = 0
         self.history_index: list[int] = []
@@ -377,6 +378,18 @@ class ManualEpcGui:
             command=self._zero_enabled,
         )
         self.zero_button.grid(row=0, column=1, sticky="ew", padx=4)
+        self.record_button = ttk.Button(
+            actions,
+            text="Record now",
+            command=self._record_now,
+        )
+        self.record_button.grid(
+            row=1,
+            column=0,
+            sticky="ew",
+            padx=(0, 4),
+            pady=(6, 0),
+        )
         self.measure_button = ttk.Button(
             actions,
             text="Apply + measure",
@@ -384,9 +397,9 @@ class ManualEpcGui:
         )
         self.measure_button.grid(
             row=1,
-            column=0,
+            column=1,
             sticky="ew",
-            padx=(0, 4),
+            padx=4,
             pady=(6, 0),
         )
         self.continuous_button = ttk.Button(
@@ -395,10 +408,10 @@ class ManualEpcGui:
             command=self._start_continuous,
         )
         self.continuous_button.grid(
-            row=1,
-            column=1,
+            row=2,
+            column=0,
             sticky="ew",
-            padx=4,
+            padx=(0, 4),
             pady=(6, 0),
         )
         self.stop_button = ttk.Button(
@@ -408,10 +421,10 @@ class ManualEpcGui:
             state="disabled",
         )
         self.stop_button.grid(
-            row=1,
-            column=2,
+            row=2,
+            column=1,
             sticky="ew",
-            padx=(4, 0),
+            padx=4,
             pady=(6, 0),
         )
 
@@ -543,6 +556,12 @@ class ManualEpcGui:
             log_results=bool(self.log_results.get()),
         )
 
+    def _record_duration_seconds(self) -> float:
+        duration = float(self.exposure_seconds.get())
+        if duration <= 0:
+            raise ValueError("Exposure must be positive")
+        return duration
+
     def _apply_only(self) -> None:
         try:
             settings = self._settings()
@@ -561,6 +580,17 @@ class ManualEpcGui:
     def _measure_once(self) -> None:
         self.continuous = False
         self._start_measurement()
+
+    def _record_now(self) -> None:
+        self.continuous = False
+        self.record_requested = True
+        self._set_action_state("disabled")
+        if self.busy:
+            self.status_text.set(
+                "Record requested; waiting for the current action to finish"
+            )
+            return
+        self._start_recording()
 
     def _start_continuous(self) -> None:
         self.continuous = True
@@ -588,16 +618,31 @@ class ManualEpcGui:
             return
         self._run_worker("measurement", self.engine.measure, settings)
 
+    def _start_recording(self) -> None:
+        try:
+            duration_seconds = self._record_duration_seconds()
+        except Exception as exc:
+            self.record_requested = False
+            self._set_action_state("normal")
+            messagebox.showerror(WINDOW_TITLE, str(exc))
+            return
+        self.record_requested = False
+        self._run_worker("recording", self.engine.record, duration_seconds)
+
     def _run_worker(self, event_name: str, function, *args) -> None:
         if self.busy:
             return
         self.busy = True
+        self.active_event_name = event_name
         self._set_action_state("disabled")
-        self.status_text.set(
-            "Applying voltages and measuring"
-            if event_name == "measurement"
-            else "Applying voltages"
-        )
+        if event_name == "measurement":
+            status = "Applying voltages and measuring"
+        elif event_name == "recording":
+            duration_seconds = float(args[0])
+            status = f"Recording raw data for {duration_seconds:g} s"
+        else:
+            status = "Applying voltages"
+        self.status_text.set(status)
 
         def run() -> None:
             try:
@@ -614,26 +659,39 @@ class ManualEpcGui:
             while True:
                 event_name, payload = self.events.get_nowait()
                 self.busy = False
+                self.active_event_name = None
                 if event_name == "error":
                     self.continuous = False
                     self.status_text.set(f"Error: {payload}")
                     messagebox.showerror(WINDOW_TITLE, str(payload))
                 elif event_name == "apply":
                     self.status_text.set("Enabled EPC voltages applied")
+                elif event_name == "recording":
+                    self._show_recording(payload)
                 elif event_name == "measurement":
                     self._show_measurement(payload)
 
-                self._set_action_state("normal")
-                if self.continuous and not self.closing:
+                if self.record_requested and not self.closing:
+                    self._start_recording()
+                elif self.continuous and not self.closing:
+                    self._set_action_state("normal")
                     self.root.after(200, self._start_measurement)
                 elif self.closing:
                     self._finish_close()
                     return
+                else:
+                    self._set_action_state("normal")
         except queue.Empty:
             pass
 
         if self.root.winfo_exists():
             self.root.after(100, self._poll_events)
+
+    def _show_recording(self, acquisition: AcquisitionPair) -> None:
+        self.status_text.set(
+            f"Recorded {acquisition.record_id}; "
+            f"Alice={acquisition.alice_path.name}, Bob={acquisition.bob_path.name}"
+        )
 
     def _show_measurement(self, event: MeasurementEvent) -> None:
         result = event.result
@@ -724,6 +782,14 @@ class ManualEpcGui:
         self.apply_button.configure(state=state)
         self.zero_button.configure(state=state)
         self.measure_button.configure(state=state)
+        record_state = (
+            "disabled"
+            if self.closing
+            or self.record_requested
+            or self.active_event_name == "recording"
+            else "normal"
+        )
+        self.record_button.configure(state=record_state)
         if not self.continuous:
             self.continuous_button.configure(state=state)
         if self.continuous:

@@ -207,6 +207,7 @@ def choose_qber_optimizer_step(
 ) -> float:
     drift = abs(float(current_score) - float(best_score))
     scale = 0.2 if drift < 0.05 else 0.5 if drift < 0.5 else 1.0
+    print(f"Drift = {drift}, step = {base_step * scale}")
     return float(base_step * scale)
 
 

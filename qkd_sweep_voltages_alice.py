@@ -32,11 +32,11 @@ except ImportError as exc:
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = BASE_DIR / "Data" / "EPC_Sweeps"
 
-MEASUREMENT_SECONDS = 10.0
+MEASUREMENT_SECONDS = 5.0
 SETTLE_SECONDS = 0.5
 VOLTAGE_START = 0.0
 VOLTAGE_STOP = 130.0
-VOLTAGE_STEP = 15.0
+VOLTAGE_STEP = 10.0
 # Set to an explicit sequence for repeatability tests, for example:
 # (0.0, 130.0) * 5. Leave as None for the regular ascending sweep.
 VOLTAGE_SEQUENCE: tuple[float, ...] | None = None
@@ -57,6 +57,13 @@ SWEEP_TARGETS = (
     ("Bob", 3),
 )
 
+ALICE_SINGLES_CHANNELS = tuple(
+    sorted({pair[1] for pair in SYNC_PROCESSING.coincidence_pairs})
+)
+BOB_SINGLES_CHANNELS = tuple(
+    sorted({pair[2] for pair in SYNC_PROCESSING.coincidence_pairs})
+)
+
 SWEEP_FIELDNAMES = [
     "timestamp",
     "record_id",
@@ -72,6 +79,15 @@ SWEEP_FIELDNAMES = [
     "QBER_DA",
     "total_coincidences",
     "sync_markers",
+    "singles_overlap_duration_s",
+    *[
+        f"alice_ch{channel}_singles_per_measurement"
+        for channel in ALICE_SINGLES_CHANNELS
+    ],
+    *[
+        f"bob_ch{channel}_singles_per_measurement"
+        for channel in BOB_SINGLES_CHANNELS
+    ],
     *[f"C_{label}" for label in RESULT_PAIR_ORDER],
     *[f"delay_{label}_ps" for label in RESULT_PAIR_ORDER],
 ]
@@ -162,6 +178,39 @@ def update_live_plot(figure, lines, history, target, voltage, correction):
     plt.pause(0.01)
 
 
+def channel_singles_counts(correction) -> tuple[dict[int, int], dict[int, int]]:
+    alice_counts: dict[int, int] = {}
+    bob_counts: dict[int, int] = {}
+    for result in correction.sync.pair_results:
+        alice_counts.setdefault(
+            result.pair.alice_channel,
+            int(result.alice_event_count),
+        )
+        bob_counts.setdefault(
+            result.pair.bob_channel,
+            int(result.bob_event_count),
+        )
+    return alice_counts, bob_counts
+
+
+def singles_per_measurement(
+    correction,
+) -> tuple[float, dict[int, float], dict[int, float]]:
+    duration_s = float(correction.sync.overlap_duration_s)
+    alice_counts, bob_counts = channel_singles_counts(correction)
+    if duration_s <= 0.0:
+        return duration_s, {}, {}
+
+    scale = MEASUREMENT_SECONDS / duration_s
+    alice_average = {
+        channel: count * scale for channel, count in alice_counts.items()
+    }
+    bob_average = {
+        channel: count * scale for channel, count in bob_counts.items()
+    }
+    return duration_s, alice_average, bob_average
+
+
 def result_row(
     *,
     record_id: str,
@@ -171,6 +220,9 @@ def result_row(
     voltages: list[float],
     correction,
 ) -> dict[str, object]:
+    singles_duration_s, alice_singles, bob_singles = singles_per_measurement(
+        correction
+    )
     row: dict[str, object] = {
         "timestamp": time.time(),
         "record_id": record_id,
@@ -186,7 +238,16 @@ def result_row(
         "QBER_DA": correction.basis_qber["DA"],
         "total_coincidences": correction.total_coincidences,
         "sync_markers": int(correction.sync.clock_map.counters.size),
+        "singles_overlap_duration_s": singles_duration_s,
     }
+    for channel in ALICE_SINGLES_CHANNELS:
+        row[f"alice_ch{channel}_singles_per_measurement"] = (
+            alice_singles.get(channel, 0.0)
+        )
+    for channel in BOB_SINGLES_CHANNELS:
+        row[f"bob_ch{channel}_singles_per_measurement"] = (
+            bob_singles.get(channel, 0.0)
+        )
     for label in RESULT_PAIR_ORDER:
         pair = correction.sync.results_by_name[label]
         row[f"C_{label}"] = pair.count
@@ -197,6 +258,9 @@ def result_row(
 def print_result(epc_name: str, dac: int, voltage: float, correction) -> None:
     counts = correction.counts
     delays = correction.delays_ps
+    singles_duration_s, alice_singles, bob_singles = singles_per_measurement(
+        correction
+    )
     border = "=" * 92
     print(f"\n{border}")
     print(
@@ -216,6 +280,20 @@ def print_result(epc_name: str, dac: int, voltage: float, correction) -> None:
         + "  ".join(
             f"{label}={delays[label]:+.0f}" for label in RESULT_PAIR_ORDER
         )
+    )
+    alice_text = "  ".join(
+        f"A{channel}={count:.0f}"
+        for channel, count in sorted(alice_singles.items())
+    )
+    bob_text = "  ".join(
+        f"B{channel}={count:.0f}"
+        for channel, count in sorted(bob_singles.items())
+    )
+    print(
+        "[Sweep] Singles/meas | "
+        f"avg/{MEASUREMENT_SECONDS:.3f}s over "
+        f"{singles_duration_s:.3f}s | "
+        f"{alice_text} | {bob_text}"
     )
     print(f"{border}\n")
 

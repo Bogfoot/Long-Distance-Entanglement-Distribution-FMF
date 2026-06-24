@@ -42,7 +42,7 @@ except ImportError as exc:
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "Data"
 
-RECORD_SECONDS = 60.0
+RECORD_SECONDS = 10.0
 PAUSE_BETWEEN_RECORDS = 30 * 60
 ERROR_RETRY_SECONDS = 5.0
 
@@ -50,14 +50,14 @@ ALICE_EPC_ENABLED = True
 ALICE_EPC_DEVICE_REF = 0
 EPC_START_TEMPERATURE = 50.0
 
-QBER_OPTIMIZATION_ENABLED = False
+QBER_OPTIMIZATION_ENABLED = True
 
 # Format: (label, Alice channel, Bob channel)
 QKD_COINCIDENCE_PAIRS = (
-    ("HH", 4, 2),
-    ("HV", 4, 1),
-    ("VH", 2, 2),
-    ("VV", 2, 1),
+    ("HH", 4, 1),
+    ("HV", 4, 2),
+    ("VH", 2, 1),
+    ("VV", 2, 2),
     ("DD", 1, 4),
     ("DA", 1, 3),
     ("AD", 3, 4),
@@ -66,12 +66,12 @@ QKD_COINCIDENCE_PAIRS = (
 
 QKD_DELAY_REFERENCE_PAIRS = {
     "HH": "HH",
-    "HV": "HH",
+    "HV": "HV",
     "VH": "VV",
     "VV": "VV",
     "DD": "DD",
-    "DA": "DD",
-    "AD": "AA",
+    "DA": "DA",
+    "AD": "AD",
     "AA": "AA",
 }
 
@@ -106,7 +106,7 @@ SYNC_PROCESSING = SyncProcessingConfig(
     delay_reference_pairs=None,
     delay_recheck_half_range_ps=3_000.0,
     delay_recheck_step_ps=100.0,
-    analysis_exposure_seconds=1.0,
+    analysis_exposure_seconds=1,
     store_coincidence_timetags=False,
     coincidence_timetag_dir=DATA_DIR / "CoincidenceTimetags",
     save_initial_delay_scan=True,
@@ -121,12 +121,12 @@ CORRECTION_LOGS = CorrectionLogPaths(
 
 OPTIMIZER = OptimizerConfig(
     backend="nevergrad",  # "nelder-mead" or "nevergrad"
-    optimize_epcs="alice",  # "alice", "bob", or "both"
+    optimize_epcs="both",  # "alice", "bob", or "both"
     objective_metric="visibility",  # "visibility", "vis_HV", or "vis_DA"
     objective_target=0.9,
     measurement_seconds=10.0,
     base_step_volts=25.0,
-    voltage_quantization=0.1,
+    voltage_quantization=0.032,
     maximum_voltage=130.0,
     settle_seconds=0.1,
     stable_sleep_seconds=10 * 60,
@@ -220,7 +220,11 @@ class MeasurementPipeline:
         synchronized.measurement_timestamp_s = recording_start_s
         correction = analyze_phi_plus_coincidences(synchronized)
         append_correction_result(correction, CORRECTION_LOGS.results_csv)
-        self._print_summary(acquisition, correction)
+        self._print_summary(
+            acquisition,
+            correction,
+            exposure_analyses=exposures,
+        )
         if delete_raw_files:
             delete_acquisition_files(acquisition, ACQUISITION)
         return correction
@@ -307,9 +311,60 @@ class MeasurementPipeline:
         return synchronized
 
     @staticmethod
+    def _channel_singles_counts(
+        analysis: SyncCoincidenceAnalysis,
+    ) -> tuple[dict[int, int], dict[int, int]]:
+        alice_counts: dict[int, int] = {}
+        bob_counts: dict[int, int] = {}
+        for result in analysis.pair_results:
+            alice_counts.setdefault(
+                result.pair.alice_channel,
+                int(result.alice_event_count),
+            )
+            bob_counts.setdefault(
+                result.pair.bob_channel,
+                int(result.bob_event_count),
+            )
+        return alice_counts, bob_counts
+
+    @staticmethod
+    def _average_singles_per_exposure(
+        analyses: list[SyncCoincidenceAnalysis],
+    ) -> tuple[float, float, dict[int, float], dict[int, float]]:
+        total_duration_s = np.sum(analysis.overlap_duration_s for analysis in analyses)
+        exposure_seconds = max(
+            (analysis.overlap_duration_s for analysis in analyses),
+            default=0.0,
+        )
+        if total_duration_s <= 0.0:
+            return exposure_seconds, total_duration_s, {}, {}
+
+        alice_totals: dict[int, int] = {}
+        bob_totals: dict[int, int] = {}
+        for analysis in analyses:
+            alice_counts, bob_counts = (
+                MeasurementPipeline._channel_singles_counts(analysis)
+            )
+            for channel, count in alice_counts.items():
+                alice_totals[channel] = alice_totals.get(channel, 0) + count
+            for channel, count in bob_counts.items():
+                bob_totals[channel] = bob_totals.get(channel, 0) + count
+
+        scale = exposure_seconds / total_duration_s
+        alice_average = {
+            channel: count * scale for channel, count in alice_totals.items()
+        }
+        bob_average = {
+            channel: count * scale for channel, count in bob_totals.items()
+        }
+        return exposure_seconds, total_duration_s, alice_average, bob_average
+
+    @staticmethod
     def _print_summary(
         acquisition: AcquisitionPair,
         correction: PhiPlusCorrectionResult,
+        *,
+        exposure_analyses: list[SyncCoincidenceAnalysis] | None = None,
     ) -> None:
         counts = correction.counts
         border = "=" * 88
@@ -338,6 +393,26 @@ class MeasurementPipeline:
                 for name, delay_ps in correction.delays_ps.items()
             )
         )
+        if exposure_analyses is not None:
+            exposure_seconds, total_duration_s, alice_average, bob_average = (
+                MeasurementPipeline._average_singles_per_exposure(
+                    exposure_analyses
+                )
+            )
+            alice_text = "  ".join(
+                f"A{channel}={count:.0f}"
+                for channel, count in sorted(alice_average.items())
+            )
+            bob_text = "  ".join(
+                f"B{channel}={count:.0f}"
+                for channel, count in sorted(bob_average.items())
+            )
+            print(
+                "[Alice] SINGLES/MEAS  | "
+                f"avg/{exposure_seconds:.3f}s over "
+                f"{total_duration_s:.3f}s | "
+                f"{alice_text} | {bob_text}"
+            )
         print(f"{border}\n")
 
 
