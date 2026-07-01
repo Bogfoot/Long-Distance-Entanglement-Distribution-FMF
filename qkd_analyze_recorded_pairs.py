@@ -53,12 +53,8 @@ def plot_results(data: pd.DataFrame, output_path: Path) -> None:
     axes[0].set_ylabel("Coincidences/s")
     axes[0].legend(ncol=8)
 
-    alice_channels = sorted(
-        pair[1] for pair in SYNC_PROCESSING.coincidence_pairs
-    )
-    bob_channels = sorted(
-        pair[2] for pair in SYNC_PROCESSING.coincidence_pairs
-    )
+    alice_channels = sorted(pair[1] for pair in SYNC_PROCESSING.coincidence_pairs)
+    bob_channels = sorted(pair[2] for pair in SYNC_PROCESSING.coincidence_pairs)
     for channel in sorted(set(alice_channels)):
         axes[1].plot(
             x,
@@ -139,9 +135,7 @@ def exposure_row(analysis) -> dict[str, object]:
     for result in analysis.pair_results:
         alice_channel = result.pair.alice_channel
         bob_channel = result.pair.bob_channel
-        row[f"alice_ch{alice_channel}_cps"] = (
-            result.alice_event_count / duration
-        )
+        row[f"alice_ch{alice_channel}_cps"] = result.alice_event_count / duration
         row[f"bob_ch{bob_channel}_cps"] = result.bob_event_count / duration
     return row
 

@@ -364,7 +364,7 @@ class ManualEpcGui:
 
         actions = ttk.Frame(controls)
         actions.grid(row=3, column=0, sticky="ew", pady=(0, 12))
-        for column in range(3):
+        for column in range(2):
             actions.columnconfigure(column, weight=1)
         self.apply_button = ttk.Button(
             actions,

@@ -36,7 +36,7 @@ MEASUREMENT_SECONDS = 5.0
 SETTLE_SECONDS = 0.5
 VOLTAGE_START = 0.0
 VOLTAGE_STOP = 130.0
-VOLTAGE_STEP = 10.0
+VOLTAGE_STEP = 5.0
 # Set to an explicit sequence for repeatability tests, for example:
 # (0.0, 130.0) * 5. Leave as None for the regular ascending sweep.
 VOLTAGE_SEQUENCE: tuple[float, ...] | None = None

@@ -142,12 +142,32 @@ def flatten_channel(
     return np.ascontiguousarray(timestamps, dtype=np.int64)
 
 
+def _file_size_text(path: Path) -> str:
+    try:
+        return f"{path.stat().st_size / 1_000_000:.1f} MB"
+    except OSError:
+        return "unavailable"
+
+
 def load_channel(path: str | Path, channel: int) -> tuple[np.ndarray, float]:
     path = Path(path)
     singles_map, duration_s = coincfinder.read_file_auto(str(path))
+    available_channels = sorted(singles_map)
+    if channel not in singles_map:
+        raise ValueError(
+            f"{path}: channel {channel} is absent; "
+            f"available channels are {available_channels}; "
+            f"file_size={_file_size_text(path)}; "
+            f"parsed_duration={float(duration_s):.6g} s"
+        )
     timestamps = flatten_channel(singles_map, channel)
     if timestamps.size == 0:
-        raise ValueError(f"{path}: channel {channel} contains no timestamps")
+        raise ValueError(
+            f"{path}: channel {channel} contains no timestamps; "
+            f"available channels are {available_channels}; "
+            f"file_size={_file_size_text(path)}; "
+            f"parsed_duration={float(duration_s):.6g} s"
+        )
     return timestamps, float(duration_s)
 
 
@@ -325,6 +345,26 @@ def scan_delays(
     return delays, counts
 
 
+def best_delay_from_scan(
+    delays_ps: np.ndarray,
+    counts: np.ndarray,
+) -> float | None:
+    """Return the center of the highest-count delay plateau."""
+    if delays_ps.size == 0 or counts.size == 0:
+        return None
+    best_count = int(np.max(counts))
+    if best_count <= 0:
+        return None
+
+    best_indices = np.flatnonzero(counts == best_count)
+    split_points = np.where(np.diff(best_indices) > 1)[0] + 1
+    plateaus = np.split(best_indices, split_points)
+    plateau = max(plateaus, key=lambda indices: indices.size)
+    start = float(delays_ps[int(plateau[0])])
+    end = float(delays_ps[int(plateau[-1])])
+    return (start + end) / 2.0
+
+
 def find_best_delay(
     alice_ps: np.ndarray,
     bob_ps: np.ndarray,
@@ -342,7 +382,9 @@ def find_best_delay(
         COARSE_HALF_RANGE_PS,
         COARSE_STEP_PS,
     )
-    coarse_best = float(coarse_delays[int(np.argmax(coarse_counts))])
+    coarse_best = best_delay_from_scan(coarse_delays, coarse_counts)
+    if coarse_best is None:
+        return 0.0, None
     fine_delays, fine_counts = scan_delays(
         alice_ps,
         bob_ps,
@@ -351,7 +393,9 @@ def find_best_delay(
         coarse_best + FINE_HALF_RANGE_PS,
         FINE_STEP_PS,
     )
-    best_delay_ps = float(fine_delays[int(np.argmax(fine_counts))])
+    best_delay_ps = best_delay_from_scan(fine_delays, fine_counts)
+    if best_delay_ps is None:
+        best_delay_ps = coarse_best
     delay_scan = (
         DelayScanResult(fine_delays, fine_counts)
         if capture_scan
@@ -384,11 +428,9 @@ def find_best_delay_near(
         center_ps + half_range_ps,
         step_ps,
     )
-    best_delay_ps = (
-        float(delays[int(np.argmax(counts))])
-        if counts.size and int(np.max(counts)) > 0
-        else float(center_ps)
-    )
+    best_delay_ps = best_delay_from_scan(delays, counts)
+    if best_delay_ps is None:
+        best_delay_ps = float(center_ps)
     delay_scan = DelayScanResult(delays, counts) if capture_scan else None
     return best_delay_ps, delay_scan
 
@@ -633,10 +675,15 @@ def analyze_sync_coincidence_exposures(
     delay_reference_pairs: Mapping[str, str] | None = None,
     include_partial_last_exposure: bool = False,
     capture_first_delay_scan: bool = False,
+    delay_estimation_scope: str = "recording",
 ) -> list[SyncCoincidenceAnalysis]:
     """Align one recording once, then analyze independent exposure windows."""
     if exposure_seconds <= 0:
         raise ValueError("Exposure duration must be positive")
+    if delay_estimation_scope not in {"recording", "exposure"}:
+        raise ValueError(
+            "delay_estimation_scope must be 'recording' or 'exposure'"
+        )
 
     pairs = normalize_pairs(coincidence_pairs)
     pairs_by_name = {pair.name: pair for pair in pairs}
@@ -678,6 +725,37 @@ def analyze_sync_coincidence_exposures(
         for channel in {pair.bob_channel for pair in pairs}
     }
 
+    reference_names = list(
+        dict.fromkeys(
+            delay_reference_pairs[pair.name]
+            if delay_reference_pairs is not None
+            else pair.name
+            for pair in pairs
+        )
+    )
+    recording_scanned_delays: dict[str, tuple[float, DelayScanResult | None]] = {}
+    recording_diagnostic_scans: dict[str, DelayScanResult | None] = {}
+    if delay_estimation_scope == "recording":
+        for reference_name in reference_names:
+            reference_pair = pairs_by_name[reference_name]
+            recording_scanned_delays[reference_name] = find_best_delay(
+                alice_channels[reference_pair.alice_channel],
+                bob_channels[reference_pair.bob_channel],
+                capture_scan=capture_first_delay_scan,
+                coincidence_window_ps=coincidence_window_ps,
+            )
+
+        if capture_first_delay_scan and delay_reference_pairs is not None:
+            for pair in pairs:
+                if pair.name in reference_names:
+                    continue
+                _, recording_diagnostic_scans[pair.name] = find_best_delay(
+                    alice_channels[pair.alice_channel],
+                    bob_channels[pair.bob_channel],
+                    capture_scan=True,
+                    coincidence_window_ps=coincidence_window_ps,
+                )
+
     overlap_start = float(clock_map.alice_times_ps[0])
     overlap_end = float(clock_map.alice_times_ps[-1])
     exposure_ps = exposure_seconds * PS_PER_SECOND
@@ -701,37 +779,35 @@ def analyze_sync_coincidence_exposures(
             for channel, values in bob_channels.items()
         }
 
-        reference_names = list(
-            dict.fromkeys(
-                delay_reference_pairs[pair.name]
-                if delay_reference_pairs is not None
-                else pair.name
-                for pair in pairs
+        if delay_estimation_scope == "recording":
+            scanned_delays = recording_scanned_delays
+            diagnostic_scans = (
+                recording_diagnostic_scans if exposure_index == 1 else {}
             )
-        )
-        scanned_delays: dict[str, tuple[float, DelayScanResult | None]] = {}
-        diagnostic_scans: dict[str, DelayScanResult | None] = {}
-        capture_scan = capture_first_delay_scan and exposure_index == 1
+        else:
+            scanned_delays: dict[str, tuple[float, DelayScanResult | None]] = {}
+            diagnostic_scans: dict[str, DelayScanResult | None] = {}
+            capture_scan = capture_first_delay_scan and exposure_index == 1
 
-        for reference_name in reference_names:
-            reference_pair = pairs_by_name[reference_name]
-            scanned_delays[reference_name] = find_best_delay(
-                alice_bin[reference_pair.alice_channel],
-                bob_bin[reference_pair.bob_channel],
-                capture_scan=capture_scan,
-                coincidence_window_ps=coincidence_window_ps,
-            )
-
-        if capture_scan and delay_reference_pairs is not None:
-            for pair in pairs:
-                if pair.name in reference_names:
-                    continue
-                _, diagnostic_scans[pair.name] = find_best_delay(
-                    alice_bin[pair.alice_channel],
-                    bob_bin[pair.bob_channel],
-                    capture_scan=True,
+            for reference_name in reference_names:
+                reference_pair = pairs_by_name[reference_name]
+                scanned_delays[reference_name] = find_best_delay(
+                    alice_bin[reference_pair.alice_channel],
+                    bob_bin[reference_pair.bob_channel],
+                    capture_scan=capture_scan,
                     coincidence_window_ps=coincidence_window_ps,
                 )
+
+            if capture_scan and delay_reference_pairs is not None:
+                for pair in pairs:
+                    if pair.name in reference_names:
+                        continue
+                    _, diagnostic_scans[pair.name] = find_best_delay(
+                        alice_bin[pair.alice_channel],
+                        bob_bin[pair.bob_channel],
+                        capture_scan=True,
+                        coincidence_window_ps=coincidence_window_ps,
+                    )
 
         pair_results = []
         for pair in pairs:
