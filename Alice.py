@@ -160,10 +160,10 @@ CORRECTION_LOGS = CorrectionLogPaths(
 OPTIMIZER = OptimizerConfig(
     backend="nelder-mead",  # "nelder-mead" or "nevergrad"
     optimize_epcs="both",  # "alice", "bob", or "both"
-    objective_metric="chsh_s",
-    objective_target=2.3,
-    secondary_objective_metric="visibility",
-    secondary_objective_target=0.85,
+    objective_metric="visibility",
+    objective_target=0.9,
+    secondary_objective_metric="chsh_s",
+    secondary_objective_target=2.6,
     measurement_seconds=15.0,
     base_step_volts=25.0,
     voltage_quantization=0.1,
@@ -174,7 +174,7 @@ OPTIMIZER = OptimizerConfig(
     nevergrad_optimizer="TBPSA",
     nevergrad_budget=70,
     nevergrad_seed=None,
-    raw_save_interval_steps=10,
+    raw_save_interval_steps=20,
 )
 
 PASSIVE_RAW_SAVE_INTERVAL = OPTIMIZER.raw_save_interval_steps

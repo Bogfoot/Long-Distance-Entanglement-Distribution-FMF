@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-import datetime as dt
-import json
 from pathlib import Path
-from urllib.parse import urlencode
-from urllib.request import urlopen
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,15 +8,11 @@ import pandas as pd
 from scipy.stats import pearsonr
 
 
+PLOT_RANGE = (1300, 0)
+
 CSV_PATH = Path("Data/alice_results.csv")
 OUT_DIR = Path("Data/temperature_analysis")
-
-TIMEZONE = "Europe/Ljubljana"
-
-LOCATIONS = {
-    "Ljubljana": (46.0569, 14.5058),
-    "Drnovo": (45.9566, 15.4894),
-}
+TEMPERATURE_LOG_PATH = OUT_DIR / "temperature_log.csv"
 
 METRICS = [
     "visibility",
@@ -32,41 +24,22 @@ METRICS = [
     "CHSH_S_value",
 ]
 
-MAX_LAG_MINUTES = 6 * 60
+MAX_LAG_MINUTES = 60
 LAG_STEP_MINUTES = 5
+TEMPERATURE_MERGE_TOLERANCE = pd.Timedelta("90min")
 
 
-def fetch_temperature(name: str, lat: float, lon: float, start: dt.date, end: dt.date) -> pd.DataFrame:
-    days_back = max(1, (dt.date.today() - start).days + 1)
+def apply_plot_range(df: pd.DataFrame) -> pd.DataFrame:
+    if PLOT_RANGE is None:
+        return df
 
-    params = {
-        "latitude": lat,
-        "longitude": lon,
-        "past_days": min(days_back, 92),
-        "forecast_days": 1,
-        "hourly": "temperature_2m",
-        "timezone": TIMEZONE,
-    }
+    older, newer = PLOT_RANGE
+    n = len(df)
 
-    url = "https://api.open-meteo.com/v1/forecast?" + urlencode(params)
+    stop = n if newer == 0 else max(0, n - newer)
+    start = 0 if older == 0 else max(0, n - older)
 
-    with urlopen(url, timeout=30) as response:
-        data = json.loads(response.read().decode("utf-8"))
-
-    if "hourly" not in data:
-        raise RuntimeError(f"Open-Meteo response for {name} has no hourly data: {data}")
-
-    hourly = data["hourly"]
-
-    frame = pd.DataFrame({
-        "datetime": pd.to_datetime(hourly["time"]),
-        f"T_{name}": hourly["temperature_2m"],
-    })
-
-    start_dt = pd.Timestamp(start)
-    end_dt = pd.Timestamp(end) + pd.Timedelta(days=1)
-
-    return frame[(frame["datetime"] >= start_dt) & (frame["datetime"] < end_dt)]
+    return df.iloc[start:stop].copy()
 
 
 def read_measurements(path: Path) -> pd.DataFrame:
@@ -82,28 +55,74 @@ def read_measurements(path: Path) -> pd.DataFrame:
     return df[keep].dropna(how="all", subset=keep[1:])
 
 
+def read_temperature_log(path: Path) -> pd.DataFrame:
+    if not path.is_file():
+        raise FileNotFoundError(f"Missing temperature log: {path}")
+
+    temp = pd.read_csv(path)
+
+    required = ["T_Ljubljana", "T_Drnovo"]
+    missing = [col for col in required if col not in temp.columns]
+    if missing:
+        raise ValueError(f"Temperature log is missing columns: {missing}")
+
+    datetime_series = pd.Series(pd.NaT, index=temp.index, dtype="datetime64[ns]")
+
+    if "alice_timestamp" in temp.columns:
+        ts = pd.to_numeric(temp["alice_timestamp"], errors="coerce")
+        datetime_series = datetime_series.fillna(
+            pd.to_datetime(ts, unit="s", errors="coerce")
+        )
+
+    if "logger_timestamp" in temp.columns:
+        ts = pd.to_numeric(temp["logger_timestamp"], errors="coerce")
+        datetime_series = datetime_series.fillna(
+            pd.to_datetime(ts, unit="s", errors="coerce")
+        )
+
+    if "source_timestamp" in temp.columns:
+        ts = pd.to_numeric(temp["source_timestamp"], errors="coerce")
+        datetime_series = datetime_series.fillna(
+            pd.to_datetime(ts, unit="s", errors="coerce")
+        )
+
+    if "source_datetime" in temp.columns:
+        datetime_series = datetime_series.fillna(
+            pd.to_datetime(temp["source_datetime"], errors="coerce")
+        )
+
+    temp["datetime"] = datetime_series
+    temp = temp.dropna(subset=["datetime"])
+
+    keep = ["datetime", "T_Ljubljana", "T_Drnovo"]
+    temp = temp[keep].copy()
+
+    temp["T_Ljubljana"] = pd.to_numeric(temp["T_Ljubljana"], errors="coerce")
+    temp["T_Drnovo"] = pd.to_numeric(temp["T_Drnovo"], errors="coerce")
+    temp = temp.dropna(subset=["T_Ljubljana", "T_Drnovo"])
+
+    if temp.empty:
+        raise ValueError("Temperature log contains no valid temperature rows after parsing")
+
+    temp = temp.groupby("datetime", as_index=False).mean(numeric_only=True)
+    temp["T_delta"] = temp["T_Ljubljana"] - temp["T_Drnovo"]
+
+    return temp.sort_values("datetime")
+
+
 def merge_temperature(meas: pd.DataFrame) -> pd.DataFrame:
-    start = meas["datetime"].min().date() - dt.timedelta(days=1)
-    end = min(meas["datetime"].max().date() + dt.timedelta(days=1), dt.date.today())
+    temp = read_temperature_log(TEMPERATURE_LOG_PATH)
 
-    temp = None
-    for name, (lat, lon) in LOCATIONS.items():
-        one = fetch_temperature(name, lat, lon, start, end)
-        temp = one if temp is None else pd.merge(temp, one, on="datetime", how="outer")
+    meas = meas.sort_values("datetime")
+    temp = temp.sort_values("datetime")
 
-    temp = temp.sort_values("datetime").set_index("datetime")
-    temp = temp.interpolate(method="time")
-
-    meas = meas.set_index("datetime").sort_index()
     merged = pd.merge_asof(
-        meas.reset_index(),
-        temp.reset_index().sort_values("datetime"),
+        meas,
+        temp,
         on="datetime",
         direction="nearest",
-        tolerance=pd.Timedelta("2h"),
+        tolerance=TEMPERATURE_MERGE_TOLERANCE,
     ).set_index("datetime")
-
-    merged["T_delta"] = merged["T_Ljubljana"] - merged["T_Drnovo"]
 
     for col in ["T_Ljubljana", "T_Drnovo", "T_delta"]:
         seconds = merged.index.to_series().diff().dt.total_seconds()
@@ -138,6 +157,9 @@ def pearson_table(df: pd.DataFrame) -> pd.DataFrame:
                 "p_value": p,
             })
 
+    if not rows:
+        return pd.DataFrame()
+
     return pd.DataFrame(rows).sort_values(
         by="pearson_r",
         key=lambda s: s.abs(),
@@ -160,10 +182,14 @@ def cross_correlation(df: pd.DataFrame, metric: str, temp_col: str) -> pd.DataFr
             tolerance=pd.Timedelta(minutes=max(2, LAG_STEP_MINUTES)),
         ).dropna()
 
+
         if len(joined) < 3:
             continue
-
-        r, p = pearsonr(joined[temp_col], joined[metric])
+        
+        if joined[temp_col].nunique() < 2 or joined[metric].nunique() < 2:
+            continue
+        
+        r, p = pearsonr(joined[temp_col], joined[metric])     
         rows.append({
             "metric": metric,
             "temperature_variable": temp_col,
@@ -180,7 +206,7 @@ def save_plot(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     plt.tight_layout()
     plt.savefig(path, dpi=180)
-    plt.show()
+    plt.close()
 
 
 def plot_time_series(df: pd.DataFrame) -> None:
@@ -234,7 +260,6 @@ def plot_cross_correlations(df: pd.DataFrame) -> pd.DataFrame:
                 continue
 
             all_cc.append(cc)
-
             best = cc.iloc[cc["pearson_r"].abs().argmax()]
 
             plt.figure(figsize=(8, 5))
@@ -261,7 +286,10 @@ def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     measurements = read_measurements(CSV_PATH)
+    measurements = apply_plot_range(measurements)
     df = merge_temperature(measurements)
+    print(df[["T_Ljubljana", "T_Drnovo", "T_delta"]].describe())
+    print("Rows with temperature:", df[["T_Ljubljana", "T_Drnovo"]].dropna().shape[0], "/", len(df))
 
     df.to_csv(OUT_DIR / "merged_measurements_temperature.csv")
 
@@ -272,16 +300,27 @@ def main() -> None:
     if not crosscorr.empty:
         crosscorr.to_csv(OUT_DIR / "cross_correlations.csv", index=False)
 
-        best_lags = crosscorr.loc[
-            crosscorr.groupby(["metric", "temperature_variable"])["pearson_r"]
-            .apply(lambda s: s.abs().idxmax())
-            .values
-        ]
-        best_lags.to_csv(OUT_DIR / "best_cross_correlation_lags.csv", index=False)
+        valid_crosscorr = crosscorr.replace([np.inf, -np.inf], np.nan).dropna(
+                            subset=["pearson_r"]
+                            )
 
+        if not valid_crosscorr.empty:
+            best_indices = (
+                valid_crosscorr.assign(abs_r=valid_crosscorr["pearson_r"].abs())
+                .groupby(["metric", "temperature_variable"])["abs_r"]
+                .idxmax()
+                .dropna()
+                .astype(int)
+            )
+        
+            best_lags = valid_crosscorr.loc[best_indices].drop(columns=["abs_r"], errors="ignore")
+            best_lags.to_csv(OUT_DIR / "best_cross_correlation_lags.csv", index=False)
+    else:
+        print("No valid cross-correlation values found.")
+    
     plot_time_series(df)
     plot_scatter(df)
-
+    
     print(f"Saved temperature analysis to: {OUT_DIR.resolve()}")
 
 
