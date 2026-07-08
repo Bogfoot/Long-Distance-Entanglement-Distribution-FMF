@@ -54,7 +54,7 @@ ALICE_EPC_ENABLED = True
 ALICE_EPC_DEVICE_REF = 0
 EPC_START_TEMPERATURE = 50.0
 
-QBER_OPTIMIZATION_ENABLED = False
+QBER_OPTIMIZATION_ENABLED = True
 
 # Format: (label, Alice channel, Bob channel)
 QKD_COINCIDENCE_PAIRS = (
@@ -141,7 +141,7 @@ ACQUISITION = AcquisitionConfig(
 
 SYNC_PROCESSING = SyncProcessingConfig(
     sync_channel=DEFAULT_SYNC_CHANNEL,
-    coincidence_window_ps=700.0,
+    coincidence_window_ps=275.0,
     coincidence_pairs=CHSH_COINCIDENCE_PAIRS,
     delay_reference_pairs=CHSH_DELAY_REFERENCE_PAIRS,
     analysis_exposure_seconds=1.0,
@@ -160,10 +160,10 @@ CORRECTION_LOGS = CorrectionLogPaths(
 OPTIMIZER = OptimizerConfig(
     backend="nelder-mead",  # "nelder-mead" or "nevergrad"
     optimize_epcs="both",  # "alice", "bob", or "both"
-    objective_metric="visibility",
-    objective_target=0.9,
-    secondary_objective_metric="chsh_s",
-    secondary_objective_target=2.6,
+    objective_metric="chsh_s",
+    objective_target=2.6,
+    secondary_objective_metric="visibility",
+    secondary_objective_target=0.9,
     measurement_seconds=15.0,
     base_step_volts=25.0,
     voltage_quantization=0.1,
@@ -174,7 +174,7 @@ OPTIMIZER = OptimizerConfig(
     nevergrad_optimizer="TBPSA",
     nevergrad_budget=70,
     nevergrad_seed=None,
-    raw_save_interval_steps=20,
+    raw_save_interval_steps=30,
 )
 
 PASSIVE_RAW_SAVE_INTERVAL = OPTIMIZER.raw_save_interval_steps
