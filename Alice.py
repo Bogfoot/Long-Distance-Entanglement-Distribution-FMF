@@ -141,7 +141,7 @@ ACQUISITION = AcquisitionConfig(
 
 SYNC_PROCESSING = SyncProcessingConfig(
     sync_channel=DEFAULT_SYNC_CHANNEL,
-    coincidence_window_ps=275.0,
+    coincidence_window_ps=750.0,
     coincidence_pairs=CHSH_COINCIDENCE_PAIRS,
     delay_reference_pairs=CHSH_DELAY_REFERENCE_PAIRS,
     analysis_exposure_seconds=1.0,
@@ -164,7 +164,7 @@ OPTIMIZER = OptimizerConfig(
     objective_target=2.6,
     secondary_objective_metric="visibility",
     secondary_objective_target=0.9,
-    measurement_seconds=15.0,
+    measurement_seconds=30.0,
     base_step_volts=25.0,
     voltage_quantization=0.1,
     maximum_voltage=130.0,
