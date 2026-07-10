@@ -8,7 +8,7 @@ import pandas as pd
 from scipy.stats import pearsonr
 
 
-PLOT_RANGE = (150, 0)
+PLOT_RANGE = (300, 0)
 
 CSV_PATH = Path("Data/alice_results.csv")
 OUT_DIR = Path("Data/temperature_analysis")

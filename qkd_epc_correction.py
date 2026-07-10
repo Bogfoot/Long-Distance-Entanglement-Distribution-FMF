@@ -64,6 +64,8 @@ class OptimizerConfig:
     measurement_seconds: float = 5.0
     visibility_target: float = 0.95
     base_step_volts: float = 20.0
+    minimum_step_volts: float = 2.0
+    maximum_step_volts: float = 60.0
     voltage_quantization: float = 0.1
     maximum_voltage: float = 130.0
     settle_seconds: float = 0.05
@@ -336,10 +338,117 @@ def choose_qber_optimizer_step(
     best_score: float,
     *,
     base_step: float,
+    target_score: float | None = None,
+    minimum_step: float | None = None,
+    maximum_step: float | None = None,
 ) -> float:
-    drift = abs(float(current_score) - float(best_score))
-    scale = 0.2 if drift < 0.05 else 0.5 if drift < 0.25 else 1.0
-    return float(base_step * scale)
+    """Choose an EPC voltage step from target miss and measured drift.
+
+    The optimizer measurements are noisy, so the step should be coarse when the
+    system is far from the requested target, even if the saved best score is
+    stale or also poor. Smaller steps are only useful near the target.
+    """
+    if base_step <= 0:
+        raise ValueError("base_step must be positive")
+
+    current = float(current_score)
+    best = float(best_score)
+    target = None if target_score is None else float(target_score)
+
+    target_gap = (
+        max(0.0, target - current)
+        if target is not None and np.isfinite(target) and np.isfinite(current)
+        else 0.0
+    )
+    best_drop = (
+        max(0.0, best - current)
+        if np.isfinite(best) and np.isfinite(current)
+        else 0.0
+    )
+    severity = max(target_gap, best_drop)
+    if target is not None and np.isfinite(target) and abs(target) > 1.0e-9:
+        severity = severity / abs(target)
+
+    if severity >= 0.35:
+        scale = 2.0
+    elif severity >= 0.20:
+        scale = 1.5
+    elif severity >= 0.08:
+        scale = 1.0
+    elif severity >= 0.03:
+        scale = 0.5
+    else:
+        scale = 0.25
+
+    step = float(base_step * scale)
+    if minimum_step is not None:
+        step = max(step, float(minimum_step))
+    if maximum_step is not None:
+        step = min(step, float(maximum_step))
+    return step
+
+
+def _quantize_voltage_values(
+    values: np.ndarray,
+    *,
+    voltage_quantization: float,
+    maximum_voltage: float,
+) -> np.ndarray:
+    quantized = (
+        np.round(np.asarray(values, dtype=float) / voltage_quantization)
+        * voltage_quantization
+    )
+    return np.clip(quantized, 0.0, maximum_voltage)
+
+
+def build_nelder_mead_initial_simplex(
+    active_start: np.ndarray,
+    step: float,
+    *,
+    voltage_quantization: float,
+    maximum_voltage: float,
+) -> np.ndarray:
+    """Build a non-degenerate simplex inside the allowed voltage range."""
+    if step <= 0:
+        raise ValueError("Nelder-Mead initial step must be positive")
+    if voltage_quantization <= 0:
+        raise ValueError("voltage_quantization must be positive")
+    if maximum_voltage <= 0:
+        raise ValueError("maximum_voltage must be positive")
+
+    start = _quantize_voltage_values(
+        active_start,
+        voltage_quantization=voltage_quantization,
+        maximum_voltage=maximum_voltage,
+    )
+    simplex = [start]
+    for index in range(start.size):
+        plus = start.copy()
+        plus[index] += step
+        plus = _quantize_voltage_values(
+            plus,
+            voltage_quantization=voltage_quantization,
+            maximum_voltage=maximum_voltage,
+        )
+
+        minus = start.copy()
+        minus[index] -= step
+        minus = _quantize_voltage_values(
+            minus,
+            voltage_quantization=voltage_quantization,
+            maximum_voltage=maximum_voltage,
+        )
+
+        plus_move = abs(float(plus[index] - start[index]))
+        minus_move = abs(float(minus[index] - start[index]))
+        if plus_move <= 0.0 and minus_move <= 0.0:
+            raise ValueError(
+                "Cannot build a Nelder-Mead simplex because an active voltage "
+                "cannot move within the configured voltage bounds"
+            )
+        simplex.append(plus if plus_move >= minus_move else minus)
+
+    return np.vstack(simplex)
 
 
 MeasurementCallback = Callable[..., CorrectionResult]
@@ -542,7 +651,7 @@ class PhiPlusOptimizer:
             primary_target_met = primary_result["score"] >= primary_result["target"]
 
             secondary_result = None
-            if secondary_metric is not None:
+            if secondary_metric is not None and primary_target_met:
                 if self.secondary_measure is None:
                     raise RuntimeError("secondary_measure is not configured")
                 secondary_result = self._run_monitor_phase(
@@ -554,6 +663,11 @@ class PhiPlusOptimizer:
                     fallback_voltages=fallback_voltages,
                 )
                 fallback_voltages = secondary_result["best_voltages"]
+            elif secondary_metric is not None:
+                print(
+                    "[Alice] Skipping secondary objective until primary "
+                    f"{primary_metric} target is reached"
+                )
 
             if secondary_metric is None:
                 if primary_target_met:
@@ -651,6 +765,9 @@ class PhiPlusOptimizer:
             score,
             best_score,
             base_step=self.config.base_step_volts,
+            target_score=target,
+            minimum_step=self.config.minimum_step_volts,
+            maximum_step=self.config.maximum_step_volts,
         )
         print(
             f"[Optimizer] Starting {phase_key} search | step={step:.1f} V"
@@ -756,15 +873,11 @@ class PhiPlusOptimizer:
                 raise StopIteration
             return -score
 
-        parameter_count = int(active_start.size)
-        initial_simplex = np.vstack(
-            [active_start]
-            + [
-                self._quantize(
-                    active_start + step * np.eye(parameter_count)[index]
-                )
-                for index in range(parameter_count)
-            ]
+        initial_simplex = build_nelder_mead_initial_simplex(
+            active_start,
+            step,
+            voltage_quantization=self.config.voltage_quantization,
+            maximum_voltage=self.config.maximum_voltage,
         )
 
         try:
@@ -911,9 +1024,11 @@ class PhiPlusOptimizer:
         return best_voltages, float(best_score)
 
     def _quantize(self, values: np.ndarray) -> np.ndarray:
-        step = self.config.voltage_quantization
-        quantized = np.round(np.asarray(values, dtype=float) / step) * step
-        return np.clip(quantized, 0.0, self.config.maximum_voltage)
+        return _quantize_voltage_values(
+            values,
+            voltage_quantization=self.config.voltage_quantization,
+            maximum_voltage=self.config.maximum_voltage,
+        )
 
     def _optimizer_name(self) -> str:
         if self._normalized_backend() == "nevergrad":

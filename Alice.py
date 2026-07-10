@@ -160,24 +160,27 @@ CORRECTION_LOGS = CorrectionLogPaths(
 OPTIMIZER = OptimizerConfig(
     backend="nelder-mead",  # "nelder-mead" or "nevergrad"
     optimize_epcs="both",  # "alice", "bob", or "both"
-    objective_metric="visibility", # chsh_s, or visibility
-    objective_target=0.9,
-    secondary_objective_metric="chsh_s",
-    secondary_objective_target=2.6,
+    objective_metric="chsh_s",  # "visibility", "chsh_s"
+    objective_target=2.3,
+    secondary_objective_metric="visibility",
+    secondary_objective_target=0.85,
     measurement_seconds=10.0,
     base_step_volts=25.0,
     voltage_quantization=0.1,
     maximum_voltage=130.0,
     settle_seconds=0.1,
-    stable_sleep_seconds=1 * 60,
+    stable_sleep_seconds=30.0,
     max_iterations=100,
+    voltage_tolerance=1.0,
+    score_tolerance=0.02,
+    minimum_step_volts=0.5,
+    maximum_step_volts=40.0,
     nevergrad_optimizer="TBPSA",
     nevergrad_budget=70,
     nevergrad_seed=None,
-    raw_save_interval_steps=30,
+    raw_save_interval_steps=50,
 )
 
-PASSIVE_RAW_SAVE_INTERVAL = OPTIMIZER.raw_save_interval_steps
 
 class MeasurementPipeline:
     def __init__(self, tagger) -> None:
@@ -698,23 +701,9 @@ def apply_correction_voltages(alice_epc, values: list[float]) -> None:
 
 
 def run_passive_measurements(pipeline: MeasurementPipeline) -> None:
-    run_index = 0
     while True:
         try:
-            run_index += 1
-            keep_raw = run_index % PASSIVE_RAW_SAVE_INTERVAL == 0
-            record_id = (
-                f"PASSIVE_run{run_index:06d}_{make_record_id()}"
-                if keep_raw
-                else None
-            )
-
-            pipeline.measure_exposures(
-                RECORD_SECONDS,
-                delete_raw_files=not keep_raw,
-                record_id=record_id,
-                announce_retained_raw=keep_raw,
-            )
+            pipeline.measure_exposures(RECORD_SECONDS)
             time.sleep(PAUSE_BETWEEN_RECORDS)
         except KeyboardInterrupt:
             raise

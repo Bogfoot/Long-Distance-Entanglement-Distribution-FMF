@@ -25,11 +25,11 @@ REFRESH_INTERVAL_SECONDS = 2.0
 # (1000, 0) matches the old HISTORY_ROWS=1000 behavior.
 # (300, 100) plots rows inside the latest 300 while skipping the newest 100.
 # Set to None or (0, 0) to display all rows.
-PLOT_RANGE: tuple[int | None, int | None] | None = (100, 0)
+PLOT_RANGE: tuple[int | None, int | None] | None = (700, 0)
 USE_CONSTANT_POINT_SPACING = True
 LIVE_UPDATE = True
 SAVE_PATH: Path | None = None
-PLOT_MODE = "vis"  # "both", "visibility", or "CHSH".
+PLOT_MODE = "chsh"  # "both", "visibility", or "CHSH".
 PAIR_TREND_WINDOW = 5  # Set to 0 or 1 to disable.
 
 
