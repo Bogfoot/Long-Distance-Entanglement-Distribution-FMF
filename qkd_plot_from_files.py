@@ -25,7 +25,7 @@ REFRESH_INTERVAL_SECONDS = 2.0
 # (1000, 0) matches the old HISTORY_ROWS=1000 behavior.
 # (300, 100) plots rows inside the latest 300 while skipping the newest 100.
 # Set to None or (0, 0) to display all rows.
-PLOT_RANGE: tuple[int | None, int | None] | None = (100, 0)
+PLOT_RANGE: tuple[int | None, int | None] | None = (500, 0)
 USE_CONSTANT_POINT_SPACING = True
 LIVE_UPDATE = True
 SAVE_PATH: Path | None = None
@@ -56,7 +56,7 @@ def _objective_family(metric_text: str | None) -> str | None:
 def _optimizer_target_for_metric(metric_family: str, default: float) -> float:
     if OPTIMIZER is None:
         return default
-    return default
+
     primary_family = _objective_family(OPTIMIZER.objective_metric)
     secondary_family = _objective_family(OPTIMIZER.secondary_objective_metric)
     if primary_family == metric_family and OPTIMIZER.objective_target is not None:
@@ -69,16 +69,28 @@ def _optimizer_target_for_metric(metric_family: str, default: float) -> float:
     return default
 
 
-VISIBILITY_TARGET = _optimizer_target_for_metric("visibility", 1/np.sqrt(2))
+VISIBILITY_TARGET = _optimizer_target_for_metric("visibility", 0.85)
 CHSH_CLASSICAL_LIMIT = 2.0
 CHSH_QUANTUM_LIMIT = 2.0 * np.sqrt(2.0)
 ERRORBAR_KWARGS = {"capsize": 2, "elinewidth": 0.8, "capthick": 0.8}
 PAIR_LABELS = ("HH", "VV", "DD", "AA", "HV", "VH", "DA", "AD")
 CHSH_PAIR_LABELS = (
-    "HH", "HV", "VH", "VV",
-    "HA", "HD", "VA", "VD",
-    "DH", "DV", "AH", "AV",
-    "DD", "DA", "AD", "AA",
+    "HH",
+    "HV",
+    "VH",
+    "VV",
+    "HA",
+    "HD",
+    "VA",
+    "VD",
+    "DH",
+    "DV",
+    "AH",
+    "AV",
+    "DD",
+    "DA",
+    "AD",
+    "AA",
 )
 # Keep this label convention identical to analyze_chsh_s_coincidences()
 # in qkd_epc_correction.py.
@@ -175,6 +187,7 @@ class MeasurementSeries:
     chsh_s_value: np.ndarray
     chsh_s_error: np.ndarray
     chsh_from_counts: np.ndarray
+    chsh_counts: dict[str, np.ndarray]
     chsh_expectations: dict[str, np.ndarray]
     chsh_expectation_errors: dict[str, np.ndarray]
 
@@ -277,9 +290,8 @@ def _measurement_x_values(
     if row_timestamps.size == 0:
         return _empty_array()
     if USE_CONSTANT_POINT_SPACING:
-        return (
-            np.arange(row_timestamps.size, dtype=np.float64)
-            - float(row_timestamps.size - 1)
+        return np.arange(row_timestamps.size, dtype=np.float64) - float(
+            row_timestamps.size - 1
         )
     return row_timestamps - latest_timestamp
 
@@ -330,38 +342,27 @@ def read_measurements(
 
     selected_indices = _selected_indices_for_mode(mode, qkd_indices, chsh_indices)
     if not selected_indices:
-        raise ValueError(
-            f"{path} contains no measurement rows for PLOT_MODE={mode!r}"
-        )
+        raise ValueError(f"{path} contains no measurement rows for PLOT_MODE={mode!r}")
 
     latest_timestamp = float(np.max(timestamps[selected_indices]))
     qkd_rows = [rows[index] for index in qkd_indices]
     chsh_rows = [rows[index] for index in chsh_indices]
     pair_indices = (
-        [
-            index
-            for index in chsh_indices
-            if _has_pair_counts(rows[index], PAIR_LABELS)
-        ]
+        [index for index in chsh_indices if _has_pair_counts(rows[index], PAIR_LABELS)]
         if mode == "chsh"
         else qkd_indices
     )
     pair_rows = [rows[index] for index in pair_indices]
 
     if pair_rows:
-        missing = [
-            f"C_{label}"
-            for label in PAIR_LABELS
-            if f"C_{label}" not in rows[0]
-        ]
+        missing = [f"C_{label}" for label in PAIR_LABELS if f"C_{label}" not in rows[0]]
         if missing:
             raise ValueError(
                 f"{path} is missing coincidence columns: {', '.join(missing)}"
             )
 
         counts = {
-            label: _float_column(pair_rows, f"C_{label}")
-            for label in PAIR_LABELS
+            label: _float_column(pair_rows, f"C_{label}") for label in PAIR_LABELS
         }
         total = _optional_float_column(pair_rows, "total_coincidences")
         if total is None:
@@ -383,15 +384,11 @@ def read_measurements(
         hv_correlated = _float_column(qkd_rows, "C_HH") + _float_column(
             qkd_rows, "C_VV"
         )
-        hv_errors = _float_column(qkd_rows, "C_HV") + _float_column(
-            qkd_rows, "C_VH"
-        )
+        hv_errors = _float_column(qkd_rows, "C_HV") + _float_column(qkd_rows, "C_VH")
         da_correlated = _float_column(qkd_rows, "C_DD") + _float_column(
             qkd_rows, "C_AA"
         )
-        da_errors = _float_column(qkd_rows, "C_DA") + _float_column(
-            qkd_rows, "C_AD"
-        )
+        da_errors = _float_column(qkd_rows, "C_DA") + _float_column(qkd_rows, "C_AD")
 
         visibility_hv = _optional_float_column(qkd_rows, "vis_HV")
         if visibility_hv is None:
@@ -453,13 +450,17 @@ def read_measurements(
             chsh_timestamps,
             latest_timestamp,
         )
+        chsh_counts = {
+            label: _float_column(chsh_rows, f"C_{label}")
+            for label in CHSH_PAIR_LABELS
+        }
         valid_chsh = np.isfinite(chsh_s_value)
         chsh_s_value = chsh_s_value[valid_chsh]
         chsh_s_error = chsh_s_error[valid_chsh]
         chsh_from_counts = chsh_from_counts[valid_chsh]
+        chsh_counts = {label: values[valid_chsh] for label, values in chsh_counts.items()}
         chsh_expectations = {
-            label: values[valid_chsh]
-            for label, values in chsh_expectations.items()
+            label: values[valid_chsh] for label, values in chsh_expectations.items()
         }
         chsh_expectation_errors = {
             label: values[valid_chsh]
@@ -471,9 +472,8 @@ def read_measurements(
         chsh_s_value = _empty_array()
         chsh_s_error = _empty_array()
         chsh_from_counts = np.zeros(0, dtype=bool)
-        chsh_expectations = {
-            label: _empty_array() for label in CHSH_EXPECTATION_LABELS
-        }
+        chsh_counts = {label: _empty_array() for label in CHSH_PAIR_LABELS}
+        chsh_expectations = {label: _empty_array() for label in CHSH_EXPECTATION_LABELS}
         chsh_expectation_errors = {
             label: _empty_array() for label in CHSH_EXPECTATION_LABELS
         }
@@ -512,6 +512,7 @@ def read_measurements(
         chsh_s_value=chsh_s_value,
         chsh_s_error=chsh_s_error,
         chsh_from_counts=chsh_from_counts,
+        chsh_counts=chsh_counts,
         chsh_expectations=chsh_expectations,
         chsh_expectation_errors=chsh_expectation_errors,
     )
@@ -550,11 +551,7 @@ def _indices_with_pair_counts(
     rows: list[dict[str, str]],
     labels: tuple[str, ...],
 ) -> list[int]:
-    return [
-        index
-        for index, row in enumerate(rows)
-        if _has_pair_counts(row, labels)
-    ]
+    return [index for index, row in enumerate(rows) if _has_pair_counts(row, labels)]
 
 
 def _rows_with_pair_counts(
@@ -602,9 +599,7 @@ def _timestamp_column(rows: list[dict[str, str]]) -> np.ndarray:
     if valid_count == 0:
         raise ValueError("CSV contains no valid timestamp values")
     if valid_count == 1 and len(rows) > 1:
-        raise ValueError(
-            "CSV needs at least two valid timestamps to reconstruct time"
-        )
+        raise ValueError("CSV needs at least two valid timestamps to reconstruct time")
 
     if not np.all(valid):
         row_positions = np.arange(len(rows), dtype=np.float64)
@@ -665,6 +660,178 @@ def _qber_error(correlated: np.ndarray, errors: np.ndarray) -> np.ndarray:
     return result
 
 
+def _legend_extreme_label(
+    label: str,
+    values: np.ndarray,
+    *,
+    choose_max: bool,
+) -> str:
+    valid = values[np.isfinite(values)]
+    if valid.size == 0:
+        return label
+    best = float(np.max(valid) if choose_max else np.min(valid))
+    word = "max" if choose_max else "min"
+    return f"{label} {word}={100.0 * best:.1f}%"
+
+
+def _finite_values(values: np.ndarray) -> np.ndarray:
+    values = np.asarray(values, dtype=np.float64)
+    return values[np.isfinite(values)]
+
+
+def _format_percent_stat(values: np.ndarray, *, best_is_max: bool) -> str:
+    valid = _finite_values(values)
+    if valid.size == 0:
+        return "n/a"
+    best = np.max(valid) if best_is_max else np.min(valid)
+    return (
+        f"best={100.0 * best:.2f}% "
+        f"mean={100.0 * np.mean(valid):.2f}% "
+        f"latest={100.0 * valid[-1]:.2f}%"
+    )
+
+
+def _format_value_stat(values: np.ndarray, *, best_is_max: bool) -> str:
+    valid = _finite_values(values)
+    if valid.size == 0:
+        return "n/a"
+    best = np.max(valid) if best_is_max else np.min(valid)
+    return f"best={best:.3f} mean={np.mean(valid):.3f} latest={valid[-1]:.3f}"
+
+
+def _format_count_stat(values: np.ndarray) -> str:
+    valid = _finite_values(values)
+    if valid.size == 0:
+        return "n/a"
+    return f"mean={np.mean(valid):.0f} min={np.min(valid):.0f} max={np.max(valid):.0f} latest={valid[-1]:.0f}"
+
+
+def _latest_timestamp_text(timestamp: float) -> str:
+    if not np.isfinite(timestamp):
+        return "unknown"
+    return dt.datetime.fromtimestamp(float(timestamp)).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _best_total_qber_index(series: MeasurementSeries) -> int | None:
+    valid_indices = np.flatnonzero(np.isfinite(series.qber_total))
+    if valid_indices.size == 0:
+        return None
+    return int(valid_indices[int(np.argmin(series.qber_total[valid_indices]))])
+
+
+def _best_chsh_s_index(series: MeasurementSeries) -> int | None:
+    valid_indices = np.flatnonzero(np.isfinite(series.chsh_s_value))
+    if valid_indices.size == 0:
+        return None
+    return int(valid_indices[int(np.argmax(series.chsh_s_value[valid_indices]))])
+
+
+def _format_qkd_pair_counts(series: MeasurementSeries, index: int) -> str:
+    return "  ".join(
+        f"{label}:{series.counts[label][index]:.0f}"
+        for label in PAIR_LABELS
+        if index < series.counts[label].size
+    )
+
+
+def _format_chsh_pair_counts(series: MeasurementSeries, index: int) -> str:
+    return "  ".join(
+        f"{label}:{series.chsh_counts[label][index]:.0f}"
+        for label in CHSH_PAIR_LABELS
+        if index < series.chsh_counts[label].size
+        and np.isfinite(series.chsh_counts[label][index])
+    )
+
+
+def _format_best_qber_counts(series: MeasurementSeries) -> str:
+    index = _best_total_qber_index(series)
+    if index is None:
+        return "Best total QBER row | n/a"
+
+    display_index = int(series.measurement_index[index])
+    plot_x = float(series.relative_seconds[index])
+    return (
+        "Best total QBER row | "
+        f"display_index={display_index}/{series.size} "
+        f"plot_x={plot_x:g} "
+        f"QBER={100.0 * series.qber_total[index]:.2f}% "
+        f"HV={100.0 * series.qber_hv[index]:.2f}% "
+        f"DA={100.0 * series.qber_da[index]:.2f}% "
+        f"visibility={100.0 * series.visibility_total[index]:.2f}% | "
+        f"{_format_qkd_pair_counts(series, index)}"
+    )
+
+
+def _format_best_chsh_counts(series: MeasurementSeries) -> str:
+    index = _best_chsh_s_index(series)
+    if index is None:
+        return "Best CHSH S row | n/a"
+
+    plot_x = float(series.chsh_relative_seconds[index])
+    return (
+        "Best CHSH S row | "
+        f"display_index={index + 1}/{series.chsh_size} "
+        f"plot_x={plot_x:g} "
+        f"S={series.chsh_s_value[index]:.3f} | "
+        f"{_format_chsh_pair_counts(series, index)}"
+    )
+
+
+def print_statistics(series: MeasurementSeries, plot_mode: str) -> None:
+    print(
+        f"\n[{_latest_timestamp_text(series.latest_timestamp)}] "
+        f"PLOT_MODE={plot_mode} range={PLOT_RANGE}"
+    )
+
+    show_qkd = plot_mode in {"visibility", "both"}
+    show_chsh = plot_mode in {"chsh", "both"}
+
+    if show_qkd:
+        if series.size:
+            print(
+                f"QKD rows={series.size} | "
+                f"total coincidences {_format_count_stat(series.total_coincidences)}"
+            )
+            print(
+                "Visibility | "
+                f"H/V {_format_percent_stat(series.visibility_hv, best_is_max=True)} | "
+                f"D/A {_format_percent_stat(series.visibility_da, best_is_max=True)} | "
+                f"Total {_format_percent_stat(series.visibility_total, best_is_max=True)}"
+            )
+            print(
+                "QBER       | "
+                f"H/V {_format_percent_stat(series.qber_hv, best_is_max=False)} | "
+                f"D/A {_format_percent_stat(series.qber_da, best_is_max=False)} | "
+                f"Total {_format_percent_stat(series.qber_total, best_is_max=False)}"
+            )
+            pair_summary = "  ".join(
+                f"{label}:{np.nanmean(series.counts[label]):.0f}"
+                for label in PAIR_LABELS
+                if series.counts[label].size
+            )
+            if pair_summary:
+                print(f"Pair count means | {pair_summary}")
+            print(_format_best_qber_counts(series))
+        else:
+            print("QKD rows=0")
+
+    if show_chsh:
+        if series.chsh_size:
+            print(
+                f"CHSH rows={series.chsh_size} | "
+                f"S {_format_value_stat(series.chsh_s_value, best_is_max=True)}"
+            )
+            expectation_summary = "  ".join(
+                f"{CHSH_EXPECTATION_DISPLAY_LABELS[label]} "
+                f"{_format_value_stat(series.chsh_expectations[label], best_is_max=True)}"
+                for label in CHSH_EXPECTATION_LABELS
+            )
+            print(f"CHSH E    | {expectation_summary}")
+            print(_format_best_chsh_counts(series))
+        else:
+            print("CHSH rows=0")
+
+
 def _correlation(
     pp: np.ndarray,
     pm: np.ndarray,
@@ -689,10 +856,7 @@ def _count_row(
     counts: dict[str, np.ndarray],
     row_index: int,
 ) -> dict[str, float]:
-    return {
-        label: float(counts[label][row_index])
-        for label in CHSH_PAIR_LABELS
-    }
+    return {label: float(counts[label][row_index]) for label in CHSH_PAIR_LABELS}
 
 
 def _chsh_results_from_counts(
@@ -980,17 +1144,15 @@ def _format_absolute_time(
             positions,
             timestamps,
         )
-    return dt.datetime.fromtimestamp(float(timestamp)).strftime(
-        "%Y-%m-%d\n%H:%M:%S"
-    )
+    return dt.datetime.fromtimestamp(float(timestamp)).strftime("%Y-%m-%d\n%H:%M:%S")
 
 
 def _plot_title(plot_mode: str) -> str:
     if plot_mode == "chsh":
-        return "CHSH S monitor of optimizer runs"
+        return "CHSH S monitor of optimizer run"
     if plot_mode == "visibility":
-        return "QKD visibility/QBER monitor of optimizer runs"
-    return "QKD and CHSH monitor of optimizer runs"
+        return "QKD visibility/QBER monitor of optimizer run"
+    return "QKD and CHSH monitor of optimizer run"
 
 
 def _time_tick_positions(
@@ -1035,34 +1197,46 @@ class MeasurementPlot:
         plot_mode: str,
     ) -> tuple[tuple[str, ...], tuple[float, ...], tuple[float, float]]:
         if plot_mode == "visibility":
-            return ("pairs", "total", "visibility", "qber"), (
+            return (
+                ("pairs", "total", "visibility", "qber"),
+                (
+                    2.2,
+                    1.2,
+                    1.4,
+                    1.2,
+                ),
+                (13, 11),
+            )
+        if plot_mode == "chsh":
+            return (
+                ("pairs", "total", "chsh", "expectations"),
+                (
+                    2.2,
+                    1.2,
+                    1.3,
+                    1.2,
+                ),
+                (13, 11),
+            )
+        return (
+            (
+                "pairs",
+                "total",
+                "visibility",
+                "qber",
+                "chsh",
+                "expectations",
+            ),
+            (
                 2.2,
                 1.2,
                 1.4,
                 1.2,
-            ), (13, 11)
-        if plot_mode == "chsh":
-            return ("pairs", "total", "chsh", "expectations"), (
-                2.2,
+                1.1,
                 1.2,
-                1.3,
-                1.2,
-            ), (13, 11)
-        return (
-            "pairs",
-            "total",
-            "visibility",
-            "qber",
-            "chsh",
-            "expectations",
-        ), (
-            2.2,
-            1.2,
-            1.4,
-            1.2,
-            1.1,
-            1.2,
-        ), (13, 16)
+            ),
+            (13, 16),
+        )
 
     def _style_time_axis(self) -> None:
         self.time_ax.patch.set_visible(False)
@@ -1164,7 +1338,11 @@ class MeasurementPlot:
                 color="#0072b2",
                 marker=".",
                 linestyle="None",
-                label="H/V visibility",
+                label=_legend_extreme_label(
+                    "H/V visibility",
+                    series.visibility_hv,
+                    choose_max=True,
+                ),
                 **ERRORBAR_KWARGS,
             )
             self.visibility_ax.errorbar(
@@ -1174,7 +1352,11 @@ class MeasurementPlot:
                 color="#d55e00",
                 marker=".",
                 linestyle="None",
-                label="D/A visibility",
+                label=_legend_extreme_label(
+                    "D/A visibility",
+                    series.visibility_da,
+                    choose_max=True,
+                ),
                 **ERRORBAR_KWARGS,
             )
             self.visibility_ax.errorbar(
@@ -1184,7 +1366,11 @@ class MeasurementPlot:
                 color="black",
                 marker=".",
                 linestyle="None",
-                label="Total visibility",
+                label=_legend_extreme_label(
+                    "Total visibility",
+                    series.visibility_total,
+                    choose_max=True,
+                ),
                 **ERRORBAR_KWARGS,
             )
 
@@ -1196,7 +1382,11 @@ class MeasurementPlot:
                 color="#0072b2",
                 marker=".",
                 linestyle="None",
-                label="H/V QBER",
+                label=_legend_extreme_label(
+                    "H/V QBER",
+                    series.qber_hv,
+                    choose_max=False,
+                ),
                 **ERRORBAR_KWARGS,
             )
             self.qber_ax.errorbar(
@@ -1206,7 +1396,11 @@ class MeasurementPlot:
                 color="#d55e00",
                 marker=".",
                 linestyle="None",
-                label="D/A QBER",
+                label=_legend_extreme_label(
+                    "D/A QBER",
+                    series.qber_da,
+                    choose_max=False,
+                ),
                 **ERRORBAR_KWARGS,
             )
             self.qber_ax.errorbar(
@@ -1216,7 +1410,11 @@ class MeasurementPlot:
                 color="black",
                 marker=".",
                 linestyle="None",
-                label="Total QBER",
+                label=_legend_extreme_label(
+                    "Total QBER",
+                    series.qber_total,
+                    choose_max=False,
+                ),
                 **ERRORBAR_KWARGS,
             )
 
@@ -1289,11 +1487,11 @@ class MeasurementPlot:
             self.visibility_ax.set_ylabel("Visibility")
             self.visibility_ax.set_ylim(-1.05, 1.05)
             self.visibility_ax.axhline(
-                VISIBILITY_TARGET,
+                1 / np.sqrt(2),
                 color="#666666",
                 linestyle="--",
                 linewidth=1,
-                label=f"{VISIBILITY_TARGET:.2f}",
+                label=f"{round(1 / np.sqrt(2), 2)}",
             )
         if self.qber_ax is not None:
             self.qber_ax.set_ylabel("QBER")
@@ -1338,17 +1536,14 @@ class MeasurementPlot:
                 "Measurement number relative to latest displayed measurement"
             )
         else:
-            self.axes[-1].set_xlabel(
-                "Time relative to latest displayed measurement"
-            )
-        self.axes[-1].xaxis.set_major_formatter(
-            FuncFormatter(_format_x_axis_value)
-        )
+            self.axes[-1].set_xlabel("Time relative to latest displayed measurement")
+        self.axes[-1].xaxis.set_major_formatter(FuncFormatter(_format_x_axis_value))
         self._update_time_axis(series)
 
         for axis in self.axes:
             axis.grid(True, alpha=0.25)
-            axis.legend(loc="best", ncol=4, fontsize=9)
+            legend_columns = 2 if axis in {self.visibility_ax, self.qber_ax} else 4
+            axis.legend(loc="best", ncol=legend_columns, fontsize=9)
 
         self.figure.tight_layout(rect=(0.0, 0.0, 1.0, 0.96))
         self.figure.canvas.draw_idle()
@@ -1387,6 +1582,7 @@ def main() -> None:
             if signature != last_signature:
                 series = read_measurements(csv_path, PLOT_RANGE, plot_mode)
                 plot.update(series)
+                print_statistics(series, plot_mode)
                 if SAVE_PATH is not None:
                     output_path = SAVE_PATH.expanduser()
                     output_path.parent.mkdir(parents=True, exist_ok=True)

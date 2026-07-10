@@ -636,7 +636,7 @@ class PhiPlusOptimizer:
             )
         )
         loop_index = 0
-        fallback_voltages = np.asarray([65.0] * 8, dtype=float)
+        fallback_voltages = np.asarray([20.0] * 8, dtype=float)
 
         while True:
             loop_index += 1

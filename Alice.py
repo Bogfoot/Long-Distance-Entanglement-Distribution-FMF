@@ -45,7 +45,7 @@ except ImportError as exc:
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "Data"
 
-RECORD_SECONDS = 20.0
+RECORD_SECONDS = 5.0
 PAUSE_BETWEEN_RECORDS = 5
 ERROR_RETRY_SECONDS = 5.0
 OPTIMIZER_BAD_ACQUISITION_MAX_ATTEMPTS = 3
@@ -147,7 +147,7 @@ ACQUISITION = AcquisitionConfig(
 
 SYNC_PROCESSING = SyncProcessingConfig(
     sync_channel=DEFAULT_SYNC_CHANNEL,
-    coincidence_window_ps=475.0,
+    coincidence_window_ps=160.0,
     coincidence_pairs=CHSH_COINCIDENCE_PAIRS,
     delay_reference_pairs=CHSH_DELAY_REFERENCE_PAIRS,
     analysis_exposure_seconds=1.0,
@@ -170,7 +170,7 @@ OPTIMIZER = OptimizerConfig(
     objective_target=0.95,
     secondary_objective_metric="chsh_s",
     secondary_objective_target=2.5,
-    measurement_seconds=10.0,
+    measurement_seconds=5.0,
     base_step_volts=25.0,
     voltage_quantization=0.1,
     maximum_voltage=130.0,
@@ -179,12 +179,12 @@ OPTIMIZER = OptimizerConfig(
     max_iterations=100,
     voltage_tolerance=1.0,
     score_tolerance=0.02,
-    minimum_step_volts=0.5,
+    minimum_step_volts=1,
     maximum_step_volts=40.0,
     nevergrad_optimizer="TBPSA",
     nevergrad_budget=70,
     nevergrad_seed=None,
-    raw_save_interval_steps=50,
+    raw_save_interval_steps=100,
 )
 
 
