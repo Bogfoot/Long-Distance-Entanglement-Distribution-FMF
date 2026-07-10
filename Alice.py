@@ -89,33 +89,39 @@ CHSH_COINCIDENCE_PAIRS = (
 
 QKD_DELAY_REFERENCE_PAIRS = {
     "HH": "HH",
-    "HV": "HV",
-    "VH": "VH",
+    "HV": "HH",
+    
+    "VH": "VV",
     "VV": "VV",
+    
     "DD": "DD",
-    "DA": "DA",
-    "AD": "AD",
+    "DA": "DD",
+    
+    "AD": "AA",
     "AA": "AA",
 }
 
 CHSH_DELAY_REFERENCE_PAIRS = {
-    "HH": "HH",
-    "HV": "HV",
-    "VH": "VH",
-    "VV": "VV",
-    "HA": "HA",
-    "HD": "HD",
-    "VA": "VA",
-    "VD": "VD",
-    "DH": "DH",
-    "DV": "DV",
-    "AH": "AH",
-    "AV": "AV",
-    "DD": "DD",
-    "DA": "DA",
-    "AD": "AD",
-    "AA": "AA",
-}
+      "HH": "VH",
+      "HV": "HV",
+      "VH": "VH",
+      "VV": "VV",
+
+      "HA": "VA",
+      "HD": "VD",
+      "VA": "VA",
+      "VD": "VD",
+
+      "DH": "DH",
+      "DV": "DV",
+      "AH": "AV",
+      "AV": "AV",
+
+      "DD": "DD",
+      "DA": "DA",
+      "AD": "AA",
+      "AA": "AA",
+  }
 
 
 @dataclass(frozen=True)
@@ -160,10 +166,10 @@ CORRECTION_LOGS = CorrectionLogPaths(
 OPTIMIZER = OptimizerConfig(
     backend="nelder-mead",  # "nelder-mead" or "nevergrad"
     optimize_epcs="both",  # "alice", "bob", or "both"
-    objective_metric="chsh_s",  # "visibility", "chsh_s"
-    objective_target=2.3,
-    secondary_objective_metric="visibility",
-    secondary_objective_target=0.85,
+    objective_metric="visibility",  # "visibility", "chsh_s"
+    objective_target=0.95,
+    secondary_objective_metric="chsh_s",
+    secondary_objective_target=2.5,
     measurement_seconds=10.0,
     base_step_volts=25.0,
     voltage_quantization=0.1,

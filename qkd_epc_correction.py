@@ -234,7 +234,8 @@ def _basis_quality(correlated_count: int, error_count: int) -> tuple[float, floa
     if total <= 0:
         return 0.0, 0.5
     visibility = (correlated_count - error_count) / total
-    qber = error_count / total
+    qber = (1-visibility)/2
+    # qber = error_count / total
     return float(visibility), float(qber)
 
 

@@ -1,39 +1,21 @@
 {
-  "last_update": "2026-07-10T06:18:15.295198+00:00",
-  "chsh": {
-    "best_V": [
-      128.0,
-      129.1,
-      113.2,
-      129.70000000000002,
-      110.10000000000001,
-      130.0,
-      35.9,
-      104.2
-    ],
-    "best_score": 1.4524465036971739,
-    "objective_metric": "chsh_s",
-    "optimizer_backend": "nelder-mead",
-    "optimizer_name": "Nelder-Mead",
-    "optimize_epcs": "both",
-    "last_update": "2026-07-10T06:18:15.295173+00:00"
-  },
+  "last_update": "2026-07-10T10:23:27.483097+00:00",
   "qber": {
     "best_V": [
-      128.0,
-      129.1,
-      113.2,
-      129.70000000000002,
-      110.10000000000001,
-      130.0,
-      35.9,
-      129.20000000000002
+      68.2,
+      51.5,
+      76.80000000000001,
+      75.0,
+      73.2,
+      82.9,
+      48.6,
+      77.30000000000001
     ],
-    "best_score": 0.437870157038461,
+    "best_score": 0.6989453145599325,
     "objective_metric": "visibility",
     "optimizer_backend": "nelder-mead",
     "optimizer_name": "Nelder-Mead",
     "optimize_epcs": "both",
-    "last_update": "2026-07-09T09:52:15.185533+00:00"
+    "last_update": "2026-07-10T10:23:27.483086+00:00"
   }
 }
