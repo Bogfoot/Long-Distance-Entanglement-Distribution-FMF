@@ -77,6 +77,9 @@ class OptimizerConfig:
     nevergrad_budget: int = 100
     nevergrad_seed: int | None = None
     raw_save_interval_steps: int = 0
+    raw_save_qber_threshold: float | None = None
+    raw_save_chsh_s_threshold: float | None = None
+    secondary_after_primary_misses: int = 0
 
 
 @dataclass(frozen=True)
@@ -234,8 +237,7 @@ def _basis_quality(correlated_count: int, error_count: int) -> tuple[float, floa
     if total <= 0:
         return 0.0, 0.5
     visibility = (correlated_count - error_count) / total
-    qber = (1-visibility)/2
-    # qber = error_count / total
+    qber = error_count / total
     return float(visibility), float(qber)
 
 
@@ -503,6 +505,18 @@ class PhiPlusOptimizer:
             )
         if self.config.raw_save_interval_steps < 0:
             raise ValueError("raw_save_interval_steps cannot be negative")
+        if (
+            self.config.raw_save_qber_threshold is not None
+            and self.config.raw_save_qber_threshold < 0
+        ):
+            raise ValueError("raw_save_qber_threshold cannot be negative")
+        if (
+            self.config.raw_save_chsh_s_threshold is not None
+            and self.config.raw_save_chsh_s_threshold < 0
+        ):
+            raise ValueError("raw_save_chsh_s_threshold cannot be negative")
+        if self.config.secondary_after_primary_misses < 0:
+            raise ValueError("secondary_after_primary_misses cannot be negative")
         if backend == "nelder-mead" and minimize is None:
             raise RuntimeError(
                 "Nelder-Mead optimization was selected, but scipy is not "
@@ -636,7 +650,8 @@ class PhiPlusOptimizer:
             )
         )
         loop_index = 0
-        fallback_voltages = np.asarray([20.0] * 8, dtype=float)
+        primary_misses = 0
+        fallback_voltages = np.asarray([65.0] * 8, dtype=float)
 
         while True:
             loop_index += 1
@@ -650,11 +665,26 @@ class PhiPlusOptimizer:
             )
             fallback_voltages = primary_result["best_voltages"]
             primary_target_met = primary_result["score"] >= primary_result["target"]
+            if primary_target_met:
+                primary_misses = 0
+            else:
+                primary_misses += 1
 
             secondary_result = None
-            if secondary_metric is not None and primary_target_met:
+            force_secondary = (
+                secondary_metric is not None
+                and not primary_target_met
+                and self.config.secondary_after_primary_misses > 0
+                and primary_misses >= self.config.secondary_after_primary_misses
+            )
+            if secondary_metric is not None and (primary_target_met or force_secondary):
                 if self.secondary_measure is None:
                     raise RuntimeError("secondary_measure is not configured")
+                if force_secondary:
+                    print(
+                        "[Alice] Primary target still below target after "
+                        f"{primary_misses} loop(s); running secondary objective"
+                    )
                 secondary_result = self._run_monitor_phase(
                     phase_key="chsh",
                     objective_metric=secondary_metric,
@@ -664,6 +694,8 @@ class PhiPlusOptimizer:
                     fallback_voltages=fallback_voltages,
                 )
                 fallback_voltages = secondary_result["best_voltages"]
+                if force_secondary:
+                    primary_misses = 0
             elif secondary_metric is not None:
                 print(
                     "[Alice] Skipping secondary objective until primary "
@@ -748,10 +780,15 @@ class PhiPlusOptimizer:
             f"{objective_metric}={score:.3f} | "
             f"best={best_score:.3f} | target={target:.3f}"
         )
+        raw_saved, raw_save_reason = self._raw_save_decision(
+            measurement,
+            interval_saved=False,
+            target_met=target_met,
+        )
         self._finish_optimizer_raw_measurement(
             measurement,
-            keep_raw=target_met,
-            reason="target reached" if target_met else "check below target",
+            keep_raw=raw_saved,
+            reason=raw_save_reason,
         )
 
         if target_met or not optimize_if_needed:
@@ -843,13 +880,15 @@ class PhiPlusOptimizer:
             score = self._objective_score(measurement)
             target = self._objective_target()
             target_met = score >= target
-            raw_saved = interval_saved or target_met
+            raw_saved, raw_save_reason = self._raw_save_decision(
+                measurement,
+                interval_saved=interval_saved,
+                target_met=target_met,
+            )
             self._finish_optimizer_raw_measurement(
                 measurement,
                 keep_raw=raw_saved,
-                reason=(
-                    "target reached" if target_met else "save interval"
-                ),
+                reason=raw_save_reason,
             )
             self._log_iteration(
                 voltages,
@@ -985,13 +1024,15 @@ class PhiPlusOptimizer:
             score = self._objective_score(measurement)
             target = self._objective_target()
             target_met = score >= target
-            raw_saved = interval_saved or target_met
+            raw_saved, raw_save_reason = self._raw_save_decision(
+                measurement,
+                interval_saved=interval_saved,
+                target_met=target_met,
+            )
             self._finish_optimizer_raw_measurement(
                 measurement,
                 keep_raw=raw_saved,
-                reason=(
-                    "target reached" if target_met else "save interval"
-                ),
+                reason=raw_save_reason,
             )
             optimizer.tell(candidate, -score)
             self._log_iteration(
@@ -1039,6 +1080,43 @@ class PhiPlusOptimizer:
     def _should_save_raw_optimizer_step(self, evaluation_index: int) -> bool:
         interval = int(self.config.raw_save_interval_steps)
         return interval > 0 and evaluation_index % interval == 0
+
+    def _qber_threshold_met(self, measurement: CorrectionResult) -> bool:
+        threshold = self.config.raw_save_qber_threshold
+        return (
+            threshold is not None
+            and isinstance(measurement, PhiPlusCorrectionResult)
+            and measurement.qber_total <= float(threshold)
+        )
+
+    def _chsh_s_threshold_met(self, measurement: CorrectionResult) -> bool:
+        threshold = self.config.raw_save_chsh_s_threshold
+        return (
+            threshold is not None
+            and isinstance(measurement, CHSHCorrectionResult)
+            and measurement.S_value > float(threshold)
+        )
+
+    def _raw_save_decision(
+        self,
+        measurement: CorrectionResult,
+        *,
+        interval_saved: bool,
+        target_met: bool,
+    ) -> tuple[bool, str]:
+        if target_met:
+            return True, "target reached"
+        if self._qber_threshold_met(measurement):
+            return True, (
+                f"QBER <= {100.0 * float(self.config.raw_save_qber_threshold):.2f}%"
+            )
+        if self._chsh_s_threshold_met(measurement):
+            return True, (
+                f"S > {float(self.config.raw_save_chsh_s_threshold):.3f}"
+            )
+        if interval_saved:
+            return True, "save interval"
+        return False, "not retained"
 
     def _raw_record_label(self) -> str:
         return "CHSH_S" if self._active_objective_metric == "chsh_s" else "QKD"

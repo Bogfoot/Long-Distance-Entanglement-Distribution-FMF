@@ -25,7 +25,7 @@ REFRESH_INTERVAL_SECONDS = 2.0
 # (1000, 0) matches the old HISTORY_ROWS=1000 behavior.
 # (300, 100) plots rows inside the latest 300 while skipping the newest 100.
 # Set to None or (0, 0) to display all rows.
-PLOT_RANGE: tuple[int | None, int | None] | None = (500, 0)
+PLOT_RANGE: tuple[int | None, int | None] | None = (2000, 0)
 USE_CONSTANT_POINT_SPACING = True
 LIVE_UPDATE = True
 SAVE_PATH: Path | None = None
@@ -672,6 +672,21 @@ def _legend_extreme_label(
     best = float(np.max(valid) if choose_max else np.min(valid))
     word = "max" if choose_max else "min"
     return f"{label} {word}={100.0 * best:.1f}%"
+
+
+def _legend_value_extreme_label(
+    label: str,
+    values: np.ndarray,
+    *,
+    choose_max: bool,
+    precision: int = 3,
+) -> str:
+    valid = values[np.isfinite(values)]
+    if valid.size == 0:
+        return label
+    best = float(np.max(valid) if choose_max else np.min(valid))
+    word = "max" if choose_max else "min"
+    return f"{label} {word}={best:.{precision}f}"
 
 
 def _finite_values(values: np.ndarray) -> np.ndarray:
@@ -1430,7 +1445,11 @@ class MeasurementPlot:
                     marker=".",
                     markersize=6,
                     linestyle="None",
-                    label="CHSH S (counts)",
+                    label=_legend_value_extreme_label(
+                        "CHSH S (counts)",
+                        series.chsh_s_value[chsh_from_counts],
+                        choose_max=True,
+                    ),
                     **ERRORBAR_KWARGS,
                 )
             if np.any(chsh_from_stored):
@@ -1441,7 +1460,11 @@ class MeasurementPlot:
                     marker=".",
                     markersize=7,
                     linestyle="None",
-                    label="CHSH S (stored)",
+                    label=_legend_value_extreme_label(
+                        "CHSH S (stored)",
+                        series.chsh_s_value[chsh_from_stored],
+                        choose_max=True,
+                    ),
                 )
             if PAIR_TREND_WINDOW > 1:
                 self.chsh_ax.plot(

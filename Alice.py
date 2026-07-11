@@ -90,38 +90,32 @@ CHSH_COINCIDENCE_PAIRS = (
 QKD_DELAY_REFERENCE_PAIRS = {
     "HH": "HH",
     "HV": "HH",
-    
     "VH": "VV",
     "VV": "VV",
-    
     "DD": "DD",
     "DA": "DD",
-    
     "AD": "AA",
     "AA": "AA",
 }
 
 CHSH_DELAY_REFERENCE_PAIRS = {
-      "HH": "VH",
-      "HV": "HV",
-      "VH": "VH",
-      "VV": "VV",
-
-      "HA": "VA",
-      "HD": "VD",
-      "VA": "VA",
-      "VD": "VD",
-
-      "DH": "DH",
-      "DV": "DV",
-      "AH": "AV",
-      "AV": "AV",
-
-      "DD": "DD",
-      "DA": "DA",
-      "AD": "AA",
-      "AA": "AA",
-  }
+    "HH": "VH",
+    "HV": "HV",
+    "VH": "VH",
+    "VV": "VV",
+    "HA": "VA",
+    "HD": "VD",
+    "VA": "VA",
+    "VD": "VD",
+    "DH": "DH",
+    "DV": "DV",
+    "AH": "AV",
+    "AV": "AV",
+    "DD": "DD",
+    "DA": "DA",
+    "AD": "AA",
+    "AA": "AA",
+}
 
 
 @dataclass(frozen=True)
@@ -142,12 +136,12 @@ ACQUISITION = AcquisitionConfig(
     bob_port=5001,
     alice_record_dir=DATA_DIR / "AliceRaw",
     incoming_dir=DATA_DIR / "Incoming",
-    schedule_ahead_seconds=3.0,
+    schedule_ahead_seconds=1.0,
 )
 
 SYNC_PROCESSING = SyncProcessingConfig(
     sync_channel=DEFAULT_SYNC_CHANNEL,
-    coincidence_window_ps=160.0,
+    coincidence_window_ps=320.0,
     coincidence_pairs=CHSH_COINCIDENCE_PAIRS,
     delay_reference_pairs=CHSH_DELAY_REFERENCE_PAIRS,
     analysis_exposure_seconds=1.0,
@@ -167,16 +161,16 @@ OPTIMIZER = OptimizerConfig(
     backend="nelder-mead",  # "nelder-mead" or "nevergrad"
     optimize_epcs="both",  # "alice", "bob", or "both"
     objective_metric="visibility",  # "visibility", "chsh_s"
-    objective_target=0.95,
+    objective_target=0.85,
     secondary_objective_metric="chsh_s",
-    secondary_objective_target=2.5,
+    secondary_objective_target=2.4,
     measurement_seconds=5.0,
     base_step_volts=25.0,
     voltage_quantization=0.1,
     maximum_voltage=130.0,
     settle_seconds=0.1,
     stable_sleep_seconds=30.0,
-    max_iterations=100,
+    max_iterations=200,
     voltage_tolerance=1.0,
     score_tolerance=0.02,
     minimum_step_volts=1,
@@ -185,6 +179,9 @@ OPTIMIZER = OptimizerConfig(
     nevergrad_budget=70,
     nevergrad_seed=None,
     raw_save_interval_steps=100,
+    raw_save_qber_threshold=0.11,
+    raw_save_chsh_s_threshold=2.4,
+    secondary_after_primary_misses=2,
 )
 
 
