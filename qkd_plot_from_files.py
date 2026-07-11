@@ -29,7 +29,7 @@ PLOT_RANGE: tuple[int | None, int | None] | None = (2000, 0)
 USE_CONSTANT_POINT_SPACING = True
 LIVE_UPDATE = True
 SAVE_PATH: Path | None = None
-PLOT_MODE = "vis"  # "both", "visibility", or "CHSH".
+PLOT_MODE = "chsh"  # "both", "visibility", or "CHSH".
 PAIR_TREND_WINDOW = 5  # Set to 0 or 1 to disable.
 
 
