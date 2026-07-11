@@ -170,6 +170,8 @@ OPTIMIZER = OptimizerConfig(
     maximum_voltage=130.0,
     settle_seconds=0.1,
     stable_sleep_seconds=30.0,
+    success_monitor_qber_max=0.50,
+    success_monitor_chsh_s_min=1.8,
     max_iterations=200,
     voltage_tolerance=1.0,
     score_tolerance=0.02,
@@ -181,7 +183,7 @@ OPTIMIZER = OptimizerConfig(
     raw_save_interval_steps=100,
     raw_save_qber_threshold=0.11,
     raw_save_chsh_s_threshold=2.4,
-    secondary_after_primary_misses=2,
+    secondary_after_primary_misses=0,
 )
 
 

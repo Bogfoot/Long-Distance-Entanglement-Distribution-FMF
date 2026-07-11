@@ -70,6 +70,8 @@ class OptimizerConfig:
     maximum_voltage: float = 130.0
     settle_seconds: float = 0.05
     stable_sleep_seconds: float = 10 * 60
+    success_monitor_qber_max: float | None = None
+    success_monitor_chsh_s_min: float | None = None
     max_iterations: int = 200
     voltage_tolerance: float = 0.2
     score_tolerance: float = 1.0e-3
@@ -517,6 +519,26 @@ class PhiPlusOptimizer:
             raise ValueError("raw_save_chsh_s_threshold cannot be negative")
         if self.config.secondary_after_primary_misses < 0:
             raise ValueError("secondary_after_primary_misses cannot be negative")
+        if self.config.stable_sleep_seconds < 0:
+            raise ValueError("stable_sleep_seconds cannot be negative")
+        if self.config.success_monitor_qber_max is not None:
+            qber_limit = float(self.config.success_monitor_qber_max)
+            if qber_limit < 0.0 or qber_limit > 1.0:
+                raise ValueError("success_monitor_qber_max must be within 0..1")
+            if self._qkd_monitor_source() is None:
+                raise ValueError(
+                    "success_monitor_qber_max requires a visibility/QBER "
+                    "primary or secondary objective"
+                )
+        if self.config.success_monitor_chsh_s_min is not None:
+            chsh_limit = float(self.config.success_monitor_chsh_s_min)
+            if chsh_limit < 0.0:
+                raise ValueError("success_monitor_chsh_s_min cannot be negative")
+            if self._chsh_monitor_source() is None:
+                raise ValueError(
+                    "success_monitor_chsh_s_min requires a CHSH primary or "
+                    "secondary objective"
+                )
         if backend == "nelder-mead" and minimize is None:
             raise RuntimeError(
                 "Nelder-Mead optimization was selected, but scipy is not "
@@ -623,6 +645,34 @@ class PhiPlusOptimizer:
             "use 'alice', 'bob', or 'both'"
         )
 
+    def _qkd_monitor_source(self) -> tuple[str, MeasurementCallback] | None:
+        primary_metric = self._normalized_objective_metric()
+        if primary_metric != "chsh_s":
+            return primary_metric, self.measure
+
+        secondary_metric = self._normalized_secondary_objective_metric()
+        if (
+            secondary_metric is not None
+            and secondary_metric != "chsh_s"
+            and self.secondary_measure is not None
+        ):
+            return secondary_metric, self.secondary_measure
+        return None
+
+    def _chsh_monitor_source(self) -> tuple[str, MeasurementCallback] | None:
+        primary_metric = self._normalized_objective_metric()
+        if primary_metric == "chsh_s":
+            return primary_metric, self.measure
+
+        secondary_metric = self._normalized_secondary_objective_metric()
+        if (
+            secondary_metric == "chsh_s"
+            and self.secondary_measure is not None
+        ):
+            return secondary_metric, self.secondary_measure
+        return None
+
+
     def _full_voltage_vector(
         self,
         base_voltages: np.ndarray,
@@ -650,13 +700,12 @@ class PhiPlusOptimizer:
             )
         )
         loop_index = 0
-        primary_misses = 0
         fallback_voltages = np.asarray([65.0] * 8, dtype=float)
 
         while True:
             loop_index += 1
             primary_result = self._run_monitor_phase(
-                phase_key="qber",
+                phase_key=self._phase_key_for_metric(primary_metric),
                 objective_metric=primary_metric,
                 measure=self.measure,
                 monitor_seconds=monitor_seconds,
@@ -664,29 +713,20 @@ class PhiPlusOptimizer:
                 fallback_voltages=fallback_voltages,
             )
             fallback_voltages = primary_result["best_voltages"]
-            primary_target_met = primary_result["score"] >= primary_result["target"]
-            if primary_target_met:
-                primary_misses = 0
-            else:
-                primary_misses += 1
+            if primary_result["score"] < primary_result["target"]:
+                continue
 
-            secondary_result = None
-            force_secondary = (
-                secondary_metric is not None
-                and not primary_target_met
-                and self.config.secondary_after_primary_misses > 0
-                and primary_misses >= self.config.secondary_after_primary_misses
-            )
-            if secondary_metric is not None and (primary_target_met or force_secondary):
-                if self.secondary_measure is None:
-                    raise RuntimeError("secondary_measure is not configured")
-                if force_secondary:
-                    print(
-                        "[Alice] Primary target still below target after "
-                        f"{primary_misses} loop(s); running secondary objective"
-                    )
+            self._monitor_qber_guard(monitor_seconds, fallback_voltages)
+
+            if secondary_metric is None:
+                continue
+            if self.secondary_measure is None:
+                raise RuntimeError("secondary_measure is not configured")
+
+            while True:
+                loop_index += 1
                 secondary_result = self._run_monitor_phase(
-                    phase_key="chsh",
+                    phase_key=self._phase_key_for_metric(secondary_metric),
                     objective_metric=secondary_metric,
                     measure=self.secondary_measure,
                     monitor_seconds=monitor_seconds,
@@ -694,33 +734,132 @@ class PhiPlusOptimizer:
                     fallback_voltages=fallback_voltages,
                 )
                 fallback_voltages = secondary_result["best_voltages"]
-                if force_secondary:
-                    primary_misses = 0
-            elif secondary_metric is not None:
-                print(
-                    "[Alice] Skipping secondary objective until primary "
-                    f"{primary_metric} target is reached"
+                if secondary_result["score"] >= secondary_result["target"]:
+                    break
+
+            self._monitor_chsh_guard(monitor_seconds, fallback_voltages)
+
+    @staticmethod
+    def _phase_key_for_metric(metric: str) -> str:
+        return "chsh" if metric == "chsh_s" else "qber"
+
+    def _monitor_qber_guard(
+        self,
+        monitor_seconds: float,
+        voltages: np.ndarray,
+    ) -> None:
+        if self.config.success_monitor_qber_max is None:
+            return
+
+        qber_limit = float(self.config.success_monitor_qber_max)
+        print(
+            "[Alice] Visibility target reached; monitoring QBER without "
+            f"optimization until QBER >= {100.0 * qber_limit:.2f}%"
+        )
+        monitor_index = 0
+        while True:
+            monitor_index += 1
+            qkd_source = self._qkd_monitor_source()
+            if qkd_source is None:
+                raise RuntimeError(
+                    "QBER success monitor is enabled, but no QKD "
+                    "measurement callback is configured"
                 )
-
-            if secondary_metric is None:
-                if primary_target_met:
-                    print(
-                        f"[Alice] Objective target reached; sleeping "
-                        f"{self.config.stable_sleep_seconds:g} s"
-                    )
-                    time.sleep(self.config.stable_sleep_seconds)
-                continue
-
-            secondary_target_met = (
-                secondary_result is not None
-                and secondary_result["score"] >= secondary_result["target"]
+            qkd_metric, qkd_measure = qkd_source
+            qkd_result = self._measure_success_monitor(
+                qkd_metric,
+                qkd_measure,
+                monitor_seconds,
             )
-            if primary_target_met and secondary_target_met:
-                print(
-                    f"[Alice] Primary and secondary targets reached; sleeping "
-                    f"{self.config.stable_sleep_seconds:g} s"
+            if not isinstance(qkd_result, PhiPlusCorrectionResult):
+                raise TypeError("QBER success monitor requires Phi+ results")
+            self._log_monitor_measurement(
+                voltages,
+                qkd_result,
+                monitor_name="QBER guard",
+                monitor_index=monitor_index,
+            )
+            qber = float(qkd_result.qber_total)
+            print(
+                f"[Monitor] QBER={100.0 * qber:.2f}% | "
+                f"limit={100.0 * qber_limit:.2f}%"
+            )
+            if qber >= qber_limit:
+                print("[Alice] QBER guard reached; starting CHSH phase")
+                return
+
+    def _monitor_chsh_guard(
+        self,
+        monitor_seconds: float,
+        voltages: np.ndarray,
+    ) -> None:
+        if self.config.success_monitor_chsh_s_min is None:
+            return
+
+        s_limit = float(self.config.success_monitor_chsh_s_min)
+        print(
+            "[Alice] CHSH target reached; monitoring S without optimization "
+            f"until S <= {s_limit:.3f}"
+        )
+        monitor_index = 0
+        while True:
+            monitor_index += 1
+            chsh_source = self._chsh_monitor_source()
+            if chsh_source is None:
+                raise RuntimeError(
+                    "CHSH success monitor is enabled, but no CHSH "
+                    "measurement callback is configured"
                 )
-                time.sleep(self.config.stable_sleep_seconds)
+            chsh_metric, chsh_measure = chsh_source
+            chsh_result = self._measure_success_monitor(
+                chsh_metric,
+                chsh_measure,
+                monitor_seconds,
+            )
+            if not isinstance(chsh_result, CHSHCorrectionResult):
+                raise TypeError("CHSH success monitor requires CHSH results")
+            self._log_monitor_measurement(
+                voltages,
+                chsh_result,
+                monitor_name="CHSH guard",
+                monitor_index=monitor_index,
+            )
+            s_value = float(chsh_result.S_value)
+            print(f"[Monitor] CHSH S={s_value:.3f} | limit={s_limit:.3f}")
+            if s_value <= s_limit:
+                print("[Alice] CHSH guard reached; returning to visibility phase")
+                return
+
+    def _measure_success_monitor(
+        self,
+        objective_metric: str,
+        measure: MeasurementCallback,
+        monitor_seconds: float,
+    ) -> CorrectionResult:
+        self._set_active_phase(objective_metric, measure)
+        return self._measure_optimizer_step(
+            monitor_seconds,
+            evaluation_index=None,
+            keep_raw=False,
+            defer_raw_cleanup=False,
+        )
+
+    def _log_monitor_measurement(
+        self,
+        voltages: np.ndarray,
+        measurement: CorrectionResult,
+        *,
+        monitor_name: str,
+        monitor_index: int,
+    ) -> None:
+        self._log_iteration(
+            np.asarray(voltages, dtype=float),
+            measurement,
+            backend="monitor",
+            optimizer_name=monitor_name,
+            evaluation_index=monitor_index,
+            raw_saved=False,
+        )
 
     def _set_active_phase(
         self,
