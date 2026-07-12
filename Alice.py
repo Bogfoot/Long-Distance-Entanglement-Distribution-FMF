@@ -141,7 +141,7 @@ ACQUISITION = AcquisitionConfig(
 
 SYNC_PROCESSING = SyncProcessingConfig(
     sync_channel=DEFAULT_SYNC_CHANNEL,
-    coincidence_window_ps=320.0,
+    coincidence_window_ps=475.0,
     coincidence_pairs=CHSH_COINCIDENCE_PAIRS,
     delay_reference_pairs=CHSH_DELAY_REFERENCE_PAIRS,
     analysis_exposure_seconds=1.0,
