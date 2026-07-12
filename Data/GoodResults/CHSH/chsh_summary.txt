@@ -1,0 +1,204 @@
+CHSH S Summary
+
+Input CSV: /home/bogfootlj/Documents/PhDCode/Long-Distance-Entanglement-Distribution-FMF/Data/GoodResults/alice_results_good_ZeroThird_since_20260709.csv
+Metadata CSV: /home/bogfootlj/Documents/PhDCode/Long-Distance-Entanglement-Distribution-FMF/Data/GoodResults/zerothird_run_metadata.csv
+Valid CHSH rows: 13034
+Mode row counts: {'optimize': 9095, 'stability_monitor': 3939}
+Filename-kind row counts: {'CHSH_S filename': 5360, 'QKD filename': 5474, 'plain timestamp filename': 2200}
+
+All CHSH rows:
+  rows: 13034
+  first: 2026-07-09 09:50:41 CEST
+  last: 2026-07-12 14:59:47 CEST
+  span_hours: 77.15
+  filename_kinds: {'CHSH_S filename': 5360, 'QKD filename': 5474, 'plain timestamp filename': 2200}
+  CHSH_S_value: best=2.7789 median=1.5001 p10=0.2329 p90=2.0966 latest=1.6602
+  total_coincidences: median=816.0 p10=471.0 p90=1215.7
+  fraction_S_above_2: 16.3%
+  fraction_S_above_2.4: 0.7%
+  CHSH_E_ab: median=0.4173 latest=0.6417
+  CHSH_E_abp: median=0.1200 latest=-0.0606
+  CHSH_E_apb: median=-0.0360 latest=0.1073
+  CHSH_E_apbp: median=0.4609 latest=0.8506
+  S > 2: n=2131 mean=2.1546 median=2.1298 std=0.1168 sem=0.0025
+  temperature: rows=150
+    T_Ljubljana: median=28.30 °C range=28.20..28.30 °C
+    T_Drnovo: median=28.00 °C range=27.80..28.00 °C
+    T_delta: median=0.30 °C range=0.30..0.50 °C
+
+By coincidence window:
+160 ps, 1 sigma:
+  rows: 4275
+  first: 2026-07-10 14:03:56 CEST
+  last: 2026-07-11 09:25:19 CEST
+  span_hours: 19.36
+  filename_kinds: {'QKD filename': 2001, 'CHSH_S filename': 2274}
+  CHSH_S_value: best=2.7789 median=1.6119 p10=0.2577 p90=2.1442 latest=0.0504
+  total_coincidences: median=574.0 p10=484.0 p90=638.0
+  fraction_S_above_2: 19.8%
+  fraction_S_above_2.4: 1.1%
+  CHSH_E_ab: median=-0.2899 latest=0.4972
+  CHSH_E_abp: median=0.2812 latest=0.3595
+  CHSH_E_apb: median=-0.0638 latest=0.1351
+  CHSH_E_apbp: median=-0.1515 latest=-0.3233
+  S > 2: n=846 mean=2.1656 median=2.1461 std=0.1226 sem=0.0042
+  temperature: rows=150
+    T_Ljubljana: median=28.30 °C range=28.20..28.30 °C
+    T_Drnovo: median=28.00 °C range=27.80..28.00 °C
+    T_delta: median=0.30 °C range=0.30..0.50 °C
+
+320 ps, 2 sigma:
+  rows: 4747
+  first: 2026-07-11 15:11:54 CEST
+  last: 2026-07-12 09:44:15 CEST
+  span_hours: 18.54
+  filename_kinds: {'QKD filename': 768, 'CHSH_S filename': 1779, 'plain timestamp filename': 2200}
+  CHSH_S_value: best=2.5615 median=1.6614 p10=0.5463 p90=2.1348 latest=0.3119
+  total_coincidences: median=878.0 p10=800.0 p90=1016.0
+  fraction_S_above_2: 20.6%
+  fraction_S_above_2.4: 0.8%
+  CHSH_E_ab: median=0.6273 latest=0.1009
+  CHSH_E_abp: median=0.0588 latest=0.6257
+  CHSH_E_apb: median=-0.0612 latest=-0.1628
+  CHSH_E_apbp: median=0.6923 latest=0.3757
+  S > 2: n=977 mean=2.1578 median=2.1314 std=0.1144 sem=0.0037
+  temperature: rows=150
+    T_Ljubljana: median=28.30 °C range=28.20..28.30 °C
+    T_Drnovo: median=28.00 °C range=27.80..28.00 °C
+    T_delta: median=0.30 °C range=0.30..0.50 °C
+
+475 ps, 3 sigma:
+  rows: 2555
+  first: 2026-07-09 09:58:07 CEST
+  last: 2026-07-12 14:59:47 CEST
+  span_hours: 77.03
+  filename_kinds: {'CHSH_S filename': 464, 'QKD filename': 2091}
+  CHSH_S_value: best=2.4178 median=1.0979 p10=0.1585 p90=1.9575 latest=1.6602
+  total_coincidences: median=1244.0 p10=962.0 p90=1762.2
+  fraction_S_above_2: 7.7%
+  fraction_S_above_2.4: 0.1%
+  CHSH_E_ab: median=0.4641 latest=0.6417
+  CHSH_E_abp: median=-0.0938 latest=-0.0606
+  CHSH_E_apb: median=0.0459 latest=0.1073
+  CHSH_E_apbp: median=0.4579 latest=0.8506
+  S > 2: n=197 mean=2.0899 median=2.0787 std=0.0698 sem=0.0050
+  temperature: rows=150
+    T_Ljubljana: median=28.30 °C range=28.20..28.30 °C
+    T_Drnovo: median=28.00 °C range=27.80..28.00 °C
+    T_delta: median=0.30 °C range=0.30..0.50 °C
+
+480 ps, 3 sigma:
+  rows: 2
+  first: 2026-07-09 09:55:40 CEST
+  last: 2026-07-09 09:56:42 CEST
+  span_hours: 0.02
+  filename_kinds: {'CHSH_S filename': 2}
+  CHSH_S_value: best=0.7100 median=0.6563 p10=0.6132 p90=0.6993 latest=0.7100
+  total_coincidences: median=2153.5 p10=2126.7 p90=2180.3
+  fraction_S_above_2: 0.0%
+  fraction_S_above_2.4: 0.0%
+  CHSH_E_ab: median=-0.1703 latest=-0.1734
+  CHSH_E_abp: median=0.5271 latest=0.5321
+  CHSH_E_apb: median=0.2071 latest=0.1585
+  CHSH_E_apbp: median=-0.1658 latest=-0.1631
+  S > 2: no rows
+  temperature: rows=150
+    T_Ljubljana: median=28.30 °C range=28.20..28.30 °C
+    T_Drnovo: median=28.00 °C range=27.80..28.00 °C
+    T_delta: median=0.30 °C range=0.30..0.50 °C
+
+500 ps, 3 sigma:
+  rows: 1
+  first: 2026-07-09 09:50:41 CEST
+  last: 2026-07-09 09:50:41 CEST
+  span_hours: 0.00
+  filename_kinds: {'CHSH_S filename': 1}
+  CHSH_S_value: best=0.5331 median=0.5331 p10=0.5331 p90=0.5331 latest=0.5331
+  total_coincidences: median=2344.0 p10=2344.0 p90=2344.0
+  fraction_S_above_2: 0.0%
+  fraction_S_above_2.4: 0.0%
+  CHSH_E_ab: median=-0.0388 latest=-0.0388
+  CHSH_E_abp: median=0.5333 latest=0.5333
+  CHSH_E_apb: median=0.3294 latest=0.3294
+  CHSH_E_apbp: median=-0.2903 latest=-0.2903
+  S > 2: no rows
+  temperature: rows=150
+    T_Ljubljana: median=28.30 °C range=28.20..28.30 °C
+    T_Drnovo: median=28.00 °C range=27.80..28.00 °C
+    T_delta: median=0.30 °C range=0.30..0.50 °C
+
+750 ps:
+  rows: 1452
+  first: 2026-07-11 09:26:05 CEST
+  last: 2026-07-11 15:11:12 CEST
+  span_hours: 5.75
+  filename_kinds: {'QKD filename': 614, 'CHSH_S filename': 838}
+  CHSH_S_value: best=2.5576 median=0.7997 p10=0.0843 p90=1.8916 latest=1.6156
+  total_coincidences: median=457.0 p10=411.0 p90=496.0
+  fraction_S_above_2: 7.6%
+  fraction_S_above_2.4: 0.3%
+  CHSH_E_ab: median=0.2799 latest=-0.5766
+  CHSH_E_abp: median=0.1386 latest=0.5966
+  CHSH_E_apb: median=0.0536 latest=-0.2075
+  CHSH_E_apbp: median=0.0719 latest=-0.2348
+  S > 2: n=111 mean=2.1568 median=2.1258 std=0.1235 sem=0.0117
+  temperature: rows=150
+    T_Ljubljana: median=28.30 °C range=28.20..28.30 °C
+    T_Drnovo: median=28.00 °C range=27.80..28.00 °C
+    T_delta: median=0.30 °C range=0.30..0.50 °C
+
+800 ps:
+  rows: 2
+  first: 2026-07-09 09:52:41 CEST
+  last: 2026-07-09 09:54:08 CEST
+  span_hours: 0.02
+  filename_kinds: {'CHSH_S filename': 2}
+  CHSH_S_value: best=0.6533 median=0.6044 p10=0.5653 p90=0.6435 latest=0.6533
+  total_coincidences: median=2067.5 p10=1838.3 p90=2296.7
+  fraction_S_above_2: 0.0%
+  fraction_S_above_2.4: 0.0%
+  CHSH_E_ab: median=-0.1177 latest=-0.1329
+  CHSH_E_abp: median=0.6005 latest=0.6184
+  CHSH_E_apb: median=0.3115 latest=0.2884
+  CHSH_E_apbp: median=-0.1976 latest=-0.1904
+  S > 2: no rows
+  temperature: rows=150
+    T_Ljubljana: median=28.30 °C range=28.20..28.30 °C
+    T_Drnovo: median=28.00 °C range=27.80..28.00 °C
+    T_delta: median=0.30 °C range=0.30..0.50 °C
+
+Metadata phases:
+  2026-07-09 09:50:41 CEST | 500 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260709T075041.661521Z.png; window source=manual_override; match_score=0.195861; runner_up=800 ps.
+  2026-07-09 09:52:41 CEST | 800 ps | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260709T075241.480113Z.png; window source=title_match; match_score=0.188095; runner_up=500 ps.
+  2026-07-09 09:54:08 CEST | 800 ps | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260709T075408.700029Z.png; window source=title_match; match_score=0.184713; runner_up=500 ps.
+  2026-07-09 09:55:40 CEST | 480 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260709T075540.420028Z.png; window source=title_match; match_score=0.187240; runner_up=800 ps.
+  2026-07-09 09:56:42 CEST | 480 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260709T075642.747318Z.png; window source=title_match; match_score=0.188517; runner_up=750 ps.
+  2026-07-09 09:58:07 CEST | 475 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260709T075807.844174Z.png; window source=title_match; match_score=0.174797; runner_up=480 ps.
+  2026-07-09 10:01:27 CEST | 475 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260709T080127.031245Z.png; window source=title_match; match_score=0.174797; runner_up=480 ps.
+  2026-07-09 11:07:42 CEST | 475 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260709T090742.087504Z.png; window source=title_match; match_score=0.174797; runner_up=480 ps.
+  2026-07-09 11:43:49 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260709T094349.709655Z.png; window source=title_match; match_score=0.174797; runner_up=480 ps.
+  2026-07-09 11:58:26 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260709T095826.634576Z.png; window source=title_match; match_score=0.174797; runner_up=480 ps.
+  2026-07-09 12:49:39 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260709T104939.952439Z.png; window source=title_match; match_score=0.174797; runner_up=480 ps.
+  2026-07-09 13:59:35 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260709T115935.015679Z.png; window source=title_match; match_score=0.175460; runner_up=480 ps.
+  2026-07-10 08:13:16 CEST | 475 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260710T061316.089971Z.png; window source=title_match; match_score=0.178860; runner_up=480 ps.
+  2026-07-10 08:29:17 CEST | 475 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260710T062917.760904Z.png; window source=title_match; match_score=0.178860; runner_up=480 ps.
+  2026-07-10 09:18:28 CEST | 475 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260710T071828.858718Z.png; window source=title_match; match_score=0.178860; runner_up=480 ps.
+  2026-07-10 11:03:25 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T090325.230854Z.png; window source=title_match; match_score=0.178860; runner_up=480 ps.
+  2026-07-10 11:31:47 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T093147.568527Z.png; window source=title_match; match_score=0.178860; runner_up=480 ps.
+  2026-07-10 12:50:07 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T105007.229271Z.png; window source=title_match; match_score=0.175460; runner_up=480 ps.
+  2026-07-10 13:24:42 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T112442.152207Z.png; window source=title_match; match_score=0.175460; runner_up=480 ps.
+  2026-07-10 13:26:34 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T112634.378200Z.png; window source=title_match; match_score=0.175460; runner_up=480 ps.
+  2026-07-10 13:29:17 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T112917.782099Z.png; window source=title_match; match_score=0.175460; runner_up=480 ps.
+  2026-07-10 14:03:56 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T120356.842504Z.png; window source=title_match; match_score=0.199892; runner_up=750 ps.
+  2026-07-10 15:53:31 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T135331.959654Z.png; window source=title_match; match_score=0.203428; runner_up=750 ps.
+  2026-07-10 16:23:45 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T142345.347014Z.png; window source=title_match; match_score=0.203428; runner_up=750 ps.
+  2026-07-10 18:04:52 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T160452.416132Z.png; window source=title_match; match_score=0.203428; runner_up=750 ps.
+  2026-07-10 18:36:43 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T163643.556857Z.png; window source=title_match; match_score=0.203428; runner_up=750 ps.
+  2026-07-10 19:13:16 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T171316.792890Z.png; window source=title_match; match_score=0.203428; runner_up=750 ps.
+  2026-07-10 19:14:39 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T171439.658711Z.png; window source=title_match; match_score=0.203428; runner_up=750 ps.
+  2026-07-10 19:28:12 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T172812.306558Z.png; window source=title_match; match_score=0.203428; runner_up=750 ps.
+  2026-07-10 20:27:48 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T182748.438966Z.png; window source=title_match; match_score=0.203428; runner_up=750 ps.
+  2026-07-11 09:26:05 CEST | 750 ps | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260711T072605.161601Z.png; window source=title_match; match_score=0.208865; runner_up=320 ps.
+  2026-07-11 15:11:54 CEST | 320 ps, 2 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260711T131154.140193Z.png; window source=title_match; match_score=0.194519; runner_up=800 ps.
+  2026-07-11 23:09:04 CEST | 320 ps, 2 sigma | stability_monitor | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260711T210904.138648Z.png; window source=title_match; match_score=0.194519; runner_up=800 ps.
+  2026-07-12 09:44:49 CEST | 475 ps, 3 sigma | stability_monitor | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260712T074449.021540Z.png; window source=title_match; match_score=0.174797; runner_up=480 ps.

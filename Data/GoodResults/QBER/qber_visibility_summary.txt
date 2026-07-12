@@ -1,0 +1,139 @@
+QBER / Visibility Summary
+
+Input CSV: /home/bogfootlj/Documents/PhDCode/Long-Distance-Entanglement-Distribution-FMF/Data/GoodResults/alice_results_good_ZeroThird_since_20260709.csv
+Metadata CSV: /home/bogfootlj/Documents/PhDCode/Long-Distance-Entanglement-Distribution-FMF/Data/GoodResults/zerothird_run_metadata.csv
+Valid QKD rows: 7795
+Mode row counts: {'optimize': 3927, 'stability_monitor': 3868}
+
+All QKD rows:
+  rows: 7795
+  first: 2026-07-09 11:43:49 CEST
+  last: 2026-07-12 14:59:47 CEST
+  span_hours: 75.27
+  QBER_total: best=6.144% median=18.288% p10=10.139% p90=46.692% latest=12.693%
+  visibility: best=87.713% median=63.424% p10=6.617% p90=79.722% latest=74.614%
+  basis_visibility: HV_median=62.842% DA_median=66.337%
+  total_coincidences: median=418.0 p10=240.0 p90=634.0
+  QBER < 11%: n=1128 mean=9.447% median=9.557% std=1.038% sem=0.031%
+  visibility >= 70.7%: n=2651 mean=77.248% median=77.057% std=3.924% sem=0.076%
+  temperature: rows=150
+    T_Ljubljana: median=28.30 °C range=28.20..28.30 °C
+    T_Drnovo: median=28.00 °C range=27.80..28.00 °C
+    T_delta: median=0.30 °C range=0.30..0.50 °C
+  fraction_QBER_below_11pct: 14.5%
+  fraction_QBER_below_15pct: 35.9%
+  fraction_QBER_below_20pct: 54.7%
+
+By coincidence window:
+160 ps, 1 sigma:
+  rows: 2125
+  first: 2026-07-10 14:03:56 CEST
+  last: 2026-07-11 09:25:19 CEST
+  span_hours: 19.36
+  QBER_total: best=6.144% median=19.048% p10=11.393% p90=48.544% latest=45.653%
+  visibility: best=87.713% median=61.904% p10=2.911% p90=77.214% latest=8.695%
+  basis_visibility: HV_median=58.333% DA_median=66.667%
+  total_coincidences: median=281.0 p10=228.0 p90=340.0
+  QBER < 11%: n=179 mean=9.633% median=9.953% std=1.159% sem=0.087%
+  visibility >= 70.7%: n=629 mean=76.051% median=75.616% std=3.645% sem=0.145%
+  temperature: rows=150
+    T_Ljubljana: median=28.30 °C range=28.20..28.30 °C
+    T_Drnovo: median=28.00 °C range=27.80..28.00 °C
+    T_delta: median=0.30 °C range=0.30..0.50 °C
+  fraction_QBER_below_11pct: 8.4%
+  fraction_QBER_below_15pct: 32.0%
+  fraction_QBER_below_20pct: 53.1%
+
+320 ps, 2 sigma:
+  rows: 2965
+  first: 2026-07-11 15:11:54 CEST
+  last: 2026-07-12 09:44:15 CEST
+  span_hours: 18.54
+  QBER_total: best=6.366% median=13.210% p10=8.948% p90=30.414% latest=38.086%
+  visibility: best=87.268% median=73.580% p10=39.173% p90=82.103% latest=23.829%
+  basis_visibility: HV_median=73.061% DA_median=74.429%
+  total_coincidences: median=426.0 p10=388.0 p90=478.0
+  QBER < 11%: n=908 mean=9.400% median=9.497% std=1.011% sem=0.034%
+  visibility >= 70.7%: n=1786 mean=77.997% median=78.117% std=3.847% sem=0.091%
+  temperature: rows=150
+    T_Ljubljana: median=28.30 °C range=28.20..28.30 °C
+    T_Drnovo: median=28.00 °C range=27.80..28.00 °C
+    T_delta: median=0.30 °C range=0.30..0.50 °C
+  fraction_QBER_below_11pct: 30.6%
+  fraction_QBER_below_15pct: 62.4%
+  fraction_QBER_below_20pct: 78.2%
+
+475 ps, 3 sigma:
+  rows: 2091
+  first: 2026-07-09 11:43:49 CEST
+  last: 2026-07-12 14:59:47 CEST
+  span_hours: 75.27
+  QBER_total: best=9.392% median=26.107% p10=15.989% p90=57.769% latest=12.693%
+  visibility: best=81.217% median=47.786% p10=-15.537% p90=68.023% latest=74.614%
+  basis_visibility: HV_median=50.195% DA_median=50.420%
+  total_coincidences: median=537.0 p10=475.0 p90=806.0
+  QBER < 11%: n=12 mean=10.122% median=10.185% std=0.625% sem=0.180%
+  visibility >= 70.7%: n=106 mean=74.037% median=73.133% std=2.766% sem=0.269%
+  temperature: rows=150
+    T_Ljubljana: median=28.30 °C range=28.20..28.30 °C
+    T_Drnovo: median=28.00 °C range=27.80..28.00 °C
+    T_delta: median=0.30 °C range=0.30..0.50 °C
+  fraction_QBER_below_11pct: 0.6%
+  fraction_QBER_below_15pct: 6.0%
+  fraction_QBER_below_20pct: 24.5%
+
+750 ps:
+  rows: 614
+  first: 2026-07-11 09:26:05 CEST
+  last: 2026-07-11 14:07:25 CEST
+  span_hours: 4.69
+  QBER_total: best=6.682% median=20.101% p10=12.577% p90=39.280% latest=7.044%
+  visibility: best=86.636% median=59.797% p10=21.440% p90=74.846% latest=85.912%
+  basis_visibility: HV_median=56.422% DA_median=64.446%
+  total_coincidences: median=232.0 p10=203.0 p90=256.0
+  QBER < 11%: n=29 mean=9.495% median=9.649% std=1.058% sem=0.197%
+  visibility >= 70.7%: n=130 mean=75.359% median=74.619% std=3.710% sem=0.325%
+  temperature: rows=150
+    T_Ljubljana: median=28.30 °C range=28.20..28.30 °C
+    T_Drnovo: median=28.00 °C range=27.80..28.00 °C
+    T_delta: median=0.30 °C range=0.30..0.50 °C
+  fraction_QBER_below_11pct: 4.7%
+  fraction_QBER_below_15pct: 23.6%
+  fraction_QBER_below_20pct: 49.3%
+
+Metadata phases:
+  2026-07-09 09:50:41 CEST | 500 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260709T075041.661521Z.png; window source=manual_override; match_score=0.195861; runner_up=800 ps.
+  2026-07-09 09:52:41 CEST | 800 ps | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260709T075241.480113Z.png; window source=title_match; match_score=0.188095; runner_up=500 ps.
+  2026-07-09 09:54:08 CEST | 800 ps | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260709T075408.700029Z.png; window source=title_match; match_score=0.184713; runner_up=500 ps.
+  2026-07-09 09:55:40 CEST | 480 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260709T075540.420028Z.png; window source=title_match; match_score=0.187240; runner_up=800 ps.
+  2026-07-09 09:56:42 CEST | 480 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260709T075642.747318Z.png; window source=title_match; match_score=0.188517; runner_up=750 ps.
+  2026-07-09 09:58:07 CEST | 475 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260709T075807.844174Z.png; window source=title_match; match_score=0.174797; runner_up=480 ps.
+  2026-07-09 10:01:27 CEST | 475 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260709T080127.031245Z.png; window source=title_match; match_score=0.174797; runner_up=480 ps.
+  2026-07-09 11:07:42 CEST | 475 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260709T090742.087504Z.png; window source=title_match; match_score=0.174797; runner_up=480 ps.
+  2026-07-09 11:43:49 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260709T094349.709655Z.png; window source=title_match; match_score=0.174797; runner_up=480 ps.
+  2026-07-09 11:58:26 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260709T095826.634576Z.png; window source=title_match; match_score=0.174797; runner_up=480 ps.
+  2026-07-09 12:49:39 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260709T104939.952439Z.png; window source=title_match; match_score=0.174797; runner_up=480 ps.
+  2026-07-09 13:59:35 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260709T115935.015679Z.png; window source=title_match; match_score=0.175460; runner_up=480 ps.
+  2026-07-10 08:13:16 CEST | 475 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260710T061316.089971Z.png; window source=title_match; match_score=0.178860; runner_up=480 ps.
+  2026-07-10 08:29:17 CEST | 475 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260710T062917.760904Z.png; window source=title_match; match_score=0.178860; runner_up=480 ps.
+  2026-07-10 09:18:28 CEST | 475 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260710T071828.858718Z.png; window source=title_match; match_score=0.178860; runner_up=480 ps.
+  2026-07-10 11:03:25 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T090325.230854Z.png; window source=title_match; match_score=0.178860; runner_up=480 ps.
+  2026-07-10 11:31:47 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T093147.568527Z.png; window source=title_match; match_score=0.178860; runner_up=480 ps.
+  2026-07-10 12:50:07 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T105007.229271Z.png; window source=title_match; match_score=0.175460; runner_up=480 ps.
+  2026-07-10 13:24:42 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T112442.152207Z.png; window source=title_match; match_score=0.175460; runner_up=480 ps.
+  2026-07-10 13:26:34 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T112634.378200Z.png; window source=title_match; match_score=0.175460; runner_up=480 ps.
+  2026-07-10 13:29:17 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T112917.782099Z.png; window source=title_match; match_score=0.175460; runner_up=480 ps.
+  2026-07-10 14:03:56 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T120356.842504Z.png; window source=title_match; match_score=0.199892; runner_up=750 ps.
+  2026-07-10 15:53:31 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T135331.959654Z.png; window source=title_match; match_score=0.203428; runner_up=750 ps.
+  2026-07-10 16:23:45 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T142345.347014Z.png; window source=title_match; match_score=0.203428; runner_up=750 ps.
+  2026-07-10 18:04:52 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T160452.416132Z.png; window source=title_match; match_score=0.203428; runner_up=750 ps.
+  2026-07-10 18:36:43 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T163643.556857Z.png; window source=title_match; match_score=0.203428; runner_up=750 ps.
+  2026-07-10 19:13:16 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T171316.792890Z.png; window source=title_match; match_score=0.203428; runner_up=750 ps.
+  2026-07-10 19:14:39 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T171439.658711Z.png; window source=title_match; match_score=0.203428; runner_up=750 ps.
+  2026-07-10 19:28:12 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T172812.306558Z.png; window source=title_match; match_score=0.203428; runner_up=750 ps.
+  2026-07-10 20:27:48 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T182748.438966Z.png; window source=title_match; match_score=0.203428; runner_up=750 ps.
+  2026-07-11 09:26:05 CEST | 750 ps | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260711T072605.161601Z.png; window source=title_match; match_score=0.208865; runner_up=320 ps.
+  2026-07-11 15:11:54 CEST | 320 ps, 2 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260711T131154.140193Z.png; window source=title_match; match_score=0.194519; runner_up=800 ps.
+  2026-07-11 23:09:04 CEST | 320 ps, 2 sigma | stability_monitor | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260711T210904.138648Z.png; window source=title_match; match_score=0.194519; runner_up=800 ps.
+  2026-07-12 09:44:49 CEST | 475 ps, 3 sigma | stability_monitor | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260712T074449.021540Z.png; window source=title_match; match_score=0.174797; runner_up=480 ps.
+Excluded rows with QBER_total <= 0: 0

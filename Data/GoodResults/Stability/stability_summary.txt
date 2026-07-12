@@ -1,0 +1,24 @@
+ZeroThird Stability Monitor Summary
+
+Input CSV: /home/bogfootlj/Documents/PhDCode/Long-Distance-Entanglement-Distribution-FMF/Data/qber_iterlog.csv
+Metadata CSV: /home/bogfootlj/Documents/PhDCode/Long-Distance-Entanglement-Distribution-FMF/Data/GoodResults/zerothird_run_metadata.csv
+Monitor rows after stability start: 2200
+Monitor blocks: 2
+
+Block 1: QBER guard (qber, visibility)
+  rows: 2197
+  first: 2026-07-11 23:38:34 CEST
+  last: 2026-07-12 07:55:21 CEST
+  span_hours: 8.28
+  QBER: first=8.307% latest=53.889% median=12.371% p10=8.836% p90=23.739% 
+  drift_per_hour: 5.505%
+  threshold: QBER >= 50% after 8.28 h
+
+Block 2: CHSH guard (chsh, chsh_s)
+  rows: 3
+  first: 2026-07-12 08:11:38 CEST
+  last: 2026-07-12 08:12:04 CEST
+  span_hours: 0.01
+  CHSH_S_value: first=2.0635 latest=1.7865 median=2.0635 p10=1.8419 p90=2.1940 
+  drift_per_hour: -38.5270
+  threshold: S <= 1.8 after 0.01 h

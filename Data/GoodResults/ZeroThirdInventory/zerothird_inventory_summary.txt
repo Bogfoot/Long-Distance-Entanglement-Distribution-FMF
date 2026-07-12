@@ -1,0 +1,112 @@
+ZeroThird Date / File Inventory
+
+Source switch local: 2026-07-09T09:50:41.661521+02:00
+Source switch UTC: 2026-07-09T07:50:41.661521+00:00
+Input ZeroThird CSV: /home/bogfootlj/Documents/PhDCode/Long-Distance-Entanglement-Distribution-FMF/Data/GoodResults/alice_results_good_ZeroThird_since_20260709.csv
+Delay scan directory: /home/bogfootlj/Documents/PhDCode/Long-Distance-Entanglement-Distribution-FMF/Data/DelayScans
+Metadata CSV: /home/bogfootlj/Documents/PhDCode/Long-Distance-Entanglement-Distribution-FMF/Data/GoodResults/zerothird_run_metadata.csv
+
+Unique ZeroThird Alice run files: 13158
+First ZeroThird run file: 2026-07-09 09:50:41 CEST
+Last ZeroThird run file: 2026-07-12 14:59:47 CEST
+
+Unique Alice run files by filename kind:
+  CHSH_S filename: 5360
+  QKD filename: 5475
+  plain timestamp filename: 2323
+
+Unique Alice run files by local date:
+  2026-07-09: 849
+  2026-07-10: 2519
+  2026-07-11: 6067
+  2026-07-12: 3723
+
+Largest ZeroThird run-file gaps:
+14.61 h: 2026-07-09 17:36:44 CEST -> 2026-07-10 08:13:16 CEST | alice_QKD_step0202_20260709T153644.882958Z_exp_10.0s.bin -> alice_CHSH_S_20260710T061316.089971Z_exp_20.0s.bin
+0.58 h: 2026-07-10 13:29:17 CEST -> 2026-07-10 14:03:56 CEST | alice_QKD_20260710T112917.782099Z_exp_20.0s.bin -> alice_QKD_20260710T120356.842504Z_exp_20.0s.bin
+0.52 h: 2026-07-10 12:53:28 CEST -> 2026-07-10 13:24:42 CEST | alice_QKD_step0006_20260710T105328.600337Z_exp_10.0s.bin -> alice_QKD_20260710T112442.152207Z_exp_20.0s.bin
+0.35 h: 2026-07-10 12:29:14 CEST -> 2026-07-10 12:50:07 CEST | alice_QKD_step0120_20260710T102914.574039Z_exp_10.0s.bin -> alice_QKD_20260710T105007.229271Z_exp_20.0s.bin
+0.22 h: 2026-07-10 19:15:11 CEST -> 2026-07-10 19:28:12 CEST | alice_QKD_step0002_20260710T171511.219649Z_exp_5.0s.bin -> alice_QKD_20260710T172812.306558Z_exp_5.0s.bin
+0.15 h: 2026-07-10 15:19:16 CEST -> 2026-07-10 15:28:27 CEST | alice_QKD_step0154_20260710T131916.284030Z_exp_10.0s.bin -> alice_20260710T132827.484381Z_exp_10.0s.bin
+0.15 h: 2026-07-11 23:00:06 CEST -> 2026-07-11 23:09:04 CEST | alice_CHSH_S_step0013_20260711T210006.076308Z_exp_5.0s.bin -> alice_QKD_20260711T210904.138648Z_exp_5.0s.bin
+0.10 h: 2026-07-09 13:53:38 CEST -> 2026-07-09 13:59:35 CEST | alice_QKD_step0139_20260709T115338.014508Z_exp_10.0s.bin -> alice_QKD_20260709T115935.015679Z_exp_20.0s.bin
+
+ZeroThird-dated delay-scan images: 34
+First ZeroThird-dated delay scan: 2026-07-09 09:50:41 CEST
+Last ZeroThird-dated delay scan: 2026-07-12 09:44:49 CEST
+Delay scans matched to ZeroThird Alice run files: 34
+
+Delay scans by record id:
+  CHSH_S: 11
+  QKD: 23
+
+Delay scans by curated metadata window:
+  160 ps, 1 sigma: 9
+  320 ps, 2 sigma: 2
+  475 ps, 3 sigma: 17
+  480 ps, 3 sigma: 2
+  500 ps, 3 sigma: 1
+  750 ps: 1
+  800 ps: 2
+
+Delay scans by local date:
+  2026-07-09: 12
+  2026-07-10: 18
+  2026-07-11: 3
+  2026-07-12: 1
+
+Delay scan match type:
+  record_id_and_timestamp: 34
+
+Largest ZeroThird delay-scan gaps:
+18.23 h: 2026-07-09 13:59:35 CEST -> 2026-07-10 08:13:16 CEST | Data/DelayScans/initial_delay_scans_QKD_20260709T115935.015679Z.png -> Data/DelayScans/initial_delay_scans_CHSH_S_20260710T061316.089971Z.png
+12.97 h: 2026-07-10 20:27:48 CEST -> 2026-07-11 09:26:05 CEST | Data/DelayScans/initial_delay_scans_QKD_20260710T182748.438966Z.png -> Data/DelayScans/initial_delay_scans_QKD_20260711T072605.161601Z.png
+10.60 h: 2026-07-11 23:09:04 CEST -> 2026-07-12 09:44:49 CEST | Data/DelayScans/initial_delay_scans_QKD_20260711T210904.138648Z.png -> Data/DelayScans/initial_delay_scans_QKD_20260712T074449.021540Z.png
+7.95 h: 2026-07-11 15:11:54 CEST -> 2026-07-11 23:09:04 CEST | Data/DelayScans/initial_delay_scans_QKD_20260711T131154.140193Z.png -> Data/DelayScans/initial_delay_scans_QKD_20260711T210904.138648Z.png
+5.76 h: 2026-07-11 09:26:05 CEST -> 2026-07-11 15:11:54 CEST | Data/DelayScans/initial_delay_scans_QKD_20260711T072605.161601Z.png -> Data/DelayScans/initial_delay_scans_QKD_20260711T131154.140193Z.png
+1.83 h: 2026-07-10 14:03:56 CEST -> 2026-07-10 15:53:31 CEST | Data/DelayScans/initial_delay_scans_QKD_20260710T120356.842504Z.png -> Data/DelayScans/initial_delay_scans_QKD_20260710T135331.959654Z.png
+1.75 h: 2026-07-10 09:18:28 CEST -> 2026-07-10 11:03:25 CEST | Data/DelayScans/initial_delay_scans_CHSH_S_20260710T071828.858718Z.png -> Data/DelayScans/initial_delay_scans_QKD_20260710T090325.230854Z.png
+1.69 h: 2026-07-10 16:23:45 CEST -> 2026-07-10 18:04:52 CEST | Data/DelayScans/initial_delay_scans_QKD_20260710T142345.347014Z.png -> Data/DelayScans/initial_delay_scans_QKD_20260710T160452.416132Z.png
+
+Curated ZeroThird metadata phases:
+  2026-07-09 09:50:41 CEST | 500 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260709T075041.661521Z.png; window source=manual_override; match_score=0.195861; runner_up=800 ps.
+  2026-07-09 09:52:41 CEST | 800 ps | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260709T075241.480113Z.png; window source=title_match; match_score=0.188095; runner_up=500 ps.
+  2026-07-09 09:54:08 CEST | 800 ps | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260709T075408.700029Z.png; window source=title_match; match_score=0.184713; runner_up=500 ps.
+  2026-07-09 09:55:40 CEST | 480 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260709T075540.420028Z.png; window source=title_match; match_score=0.187240; runner_up=800 ps.
+  2026-07-09 09:56:42 CEST | 480 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260709T075642.747318Z.png; window source=title_match; match_score=0.188517; runner_up=750 ps.
+  2026-07-09 09:58:07 CEST | 475 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260709T075807.844174Z.png; window source=title_match; match_score=0.174797; runner_up=480 ps.
+  2026-07-09 10:01:27 CEST | 475 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260709T080127.031245Z.png; window source=title_match; match_score=0.174797; runner_up=480 ps.
+  2026-07-09 11:07:42 CEST | 475 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260709T090742.087504Z.png; window source=title_match; match_score=0.174797; runner_up=480 ps.
+  2026-07-09 11:43:49 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260709T094349.709655Z.png; window source=title_match; match_score=0.174797; runner_up=480 ps.
+  2026-07-09 11:58:26 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260709T095826.634576Z.png; window source=title_match; match_score=0.174797; runner_up=480 ps.
+  2026-07-09 12:49:39 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260709T104939.952439Z.png; window source=title_match; match_score=0.174797; runner_up=480 ps.
+  2026-07-09 13:59:35 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260709T115935.015679Z.png; window source=title_match; match_score=0.175460; runner_up=480 ps.
+  2026-07-10 08:13:16 CEST | 475 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260710T061316.089971Z.png; window source=title_match; match_score=0.178860; runner_up=480 ps.
+  2026-07-10 08:29:17 CEST | 475 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260710T062917.760904Z.png; window source=title_match; match_score=0.178860; runner_up=480 ps.
+  2026-07-10 09:18:28 CEST | 475 ps, 3 sigma | optimize | CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_CHSH_S_20260710T071828.858718Z.png; window source=title_match; match_score=0.178860; runner_up=480 ps.
+  2026-07-10 11:03:25 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T090325.230854Z.png; window source=title_match; match_score=0.178860; runner_up=480 ps.
+  2026-07-10 11:31:47 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T093147.568527Z.png; window source=title_match; match_score=0.178860; runner_up=480 ps.
+  2026-07-10 12:50:07 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T105007.229271Z.png; window source=title_match; match_score=0.175460; runner_up=480 ps.
+  2026-07-10 13:24:42 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T112442.152207Z.png; window source=title_match; match_score=0.175460; runner_up=480 ps.
+  2026-07-10 13:26:34 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T112634.378200Z.png; window source=title_match; match_score=0.175460; runner_up=480 ps.
+  2026-07-10 13:29:17 CEST | 475 ps, 3 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T112917.782099Z.png; window source=title_match; match_score=0.175460; runner_up=480 ps.
+  2026-07-10 14:03:56 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T120356.842504Z.png; window source=title_match; match_score=0.199892; runner_up=750 ps.
+  2026-07-10 15:53:31 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T135331.959654Z.png; window source=title_match; match_score=0.203428; runner_up=750 ps.
+  2026-07-10 16:23:45 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T142345.347014Z.png; window source=title_match; match_score=0.203428; runner_up=750 ps.
+  2026-07-10 18:04:52 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T160452.416132Z.png; window source=title_match; match_score=0.203428; runner_up=750 ps.
+  2026-07-10 18:36:43 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T163643.556857Z.png; window source=title_match; match_score=0.203428; runner_up=750 ps.
+  2026-07-10 19:13:16 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T171316.792890Z.png; window source=title_match; match_score=0.203428; runner_up=750 ps.
+  2026-07-10 19:14:39 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T171439.658711Z.png; window source=title_match; match_score=0.203428; runner_up=750 ps.
+  2026-07-10 19:28:12 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T172812.306558Z.png; window source=title_match; match_score=0.203428; runner_up=750 ps.
+  2026-07-10 20:27:48 CEST | 160 ps, 1 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260710T182748.438966Z.png; window source=title_match; match_score=0.203428; runner_up=750 ps.
+  2026-07-11 09:26:05 CEST | 750 ps | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260711T072605.161601Z.png; window source=title_match; match_score=0.208865; runner_up=320 ps.
+  2026-07-11 15:11:54 CEST | 320 ps, 2 sigma | optimize | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260711T131154.140193Z.png; window source=title_match; match_score=0.194519; runner_up=800 ps.
+  2026-07-11 23:09:04 CEST | 320 ps, 2 sigma | stability_monitor | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260711T210904.138648Z.png; window source=title_match; match_score=0.194519; runner_up=800 ps.
+  2026-07-12 09:44:49 CEST | 475 ps, 3 sigma | stability_monitor | QKD+CHSH | Reference delay scan Data/DelayScans/initial_delay_scans_QKD_20260712T074449.021540Z.png; window source=title_match; match_score=0.174797; runner_up=480 ps.
+
+Cross-reference files:
+  zerothird_results_row_map.csv: one row per ZeroThird result row
+  zerothird_unique_alice_runs.csv: one row per unique alice_file
+  zerothird_delay_scan_inventory.csv: one row per ZeroThird-dated delay scan
+
+Note: delay-scan images are filtered by timestamp and cross-referenced to Alice result rows. The metadata CSV is the curated timeline derived from these image references.
